@@ -1,42 +1,18 @@
 <template>
-    <div class="fixed inset-0 z-30 flex flex-col bg-gray-50 dark:bg-gray-900"
-        style="padding-top: env(safe-area-inset-top, 0px); padding-bottom: 0;">
-        <!-- Header / Toolbar -->
-        <div
-            class="flex items-center justify-between px-3 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm shrink-0">
-            <!-- URL Container -->
-            <div
-                class="flex-1 flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-1.5 mr-3 overflow-hidden">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500 mr-2 shrink-0" viewBox="0 0 20 20"
-                    fill="currentColor">
-                    <path fill-rule="evenodd"
-                        d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                        clip-rule="evenodd" />
-                </svg>
-                <span class="text-sm text-gray-600 dark:text-gray-200 truncate font-mono select-all">{{ url }}</span>
-            </div>
-
-            <!-- Close Button -->
-            <button @click="$emit('close')"
-                class="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-600 dark:hover:text-red-400 transition-colors focus:outline-none">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd"
-                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                        clip-rule="evenodd" />
-                </svg>
-            </button>
-        </div>
+    <!-- Container background transparent to avoid black borders -->
+    <div class="fixed inset-0 z-30 flex flex-col bg-transparent"
+        style="padding-top: env(safe-area-inset-top, 0px); padding-bottom: 3.5rem;">
 
         <!-- Browser Content -->
-        <div class="flex-1 relative w-full bg-white dark:bg-gray-900 overflow-hidden">
-            <iframe :src="url" class="w-full h-full border-none"
-                sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-top-navigation-by-user-activation"
-                allowfullscreen referrerpolicy="no-referrer" loading="lazy" @load="handleIframeLoad"
+        <div class="flex-1 relative w-full overflow-hidden">
+            <iframe ref="iframeRef" :src="url" class="w-full h-full border-none block bg-gray-100 dark:bg-gray-900"
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-top-navigation-by-user-activation allow-downloads"
+                allowfullscreen referrerpolicy="no-referrer" @load="handleIframeLoad"
                 @error="handleIframeError"></iframe>
 
             <!-- Loading Spinner -->
             <div v-if="isLoading"
-                class="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-900 z-10 pointer-events-none">
+                class="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 z-10 pointer-events-none">
                 <div class="flex flex-col items-center">
                     <svg class="animate-spin h-8 w-8 text-blue-600 dark:text-blue-400 mb-2"
                         xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -50,15 +26,12 @@
                 </div>
             </div>
         </div>
-
-        <!-- Spacer for BottomNav -->
-        <div class="w-full shrink-0 bg-white dark:bg-gray-900"
-            style="height: calc(4.5rem + env(safe-area-inset-bottom, 0px));"></div>
     </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 
 defineProps({
     url: {
@@ -70,9 +43,97 @@ defineProps({
 defineEmits(['close']);
 
 const isLoading = ref(true);
+const iframeRef = ref(null);
+
+const handleMessage = async (event) => {
+    if (event.data && event.data.type === 'download_request') {
+        const { url, fileName } = event.data;
+        console.log('Received download request:', url, fileName);
+        console.log('Calling Rust download_file:', url);
+        
+        try {
+            await invoke('download_file', { url, filename: fileName });
+            console.log('Download started successfully');
+        } catch (err) {
+            console.error('Download failed:', err);
+        }
+    } else if (event.data && event.data.type === 'console-log') {
+        const { level, args } = event.data;
+        console[level]('[iframe]', ...args);
+    }
+};
+
+const injectTauriMock = () => {
+    if (!iframeRef.value) return;
+    
+    try {
+        const doc = iframeRef.value.contentDocument || iframeRef.value.contentWindow?.document;
+        if (!doc) return;
+        
+        const existingScript = doc.getElementById('tauri-mock-script');
+        if (existingScript) return;
+        
+        const script = doc.createElement('script');
+        script.id = 'tauri-mock-script';
+        script.textContent = `
+            (function() {
+                if (window.__TAURI_MOCK_INJECTED__) return;
+                window.__TAURI_MOCK_INJECTED__ = true;
+                
+                window.__TAURI__ = window.__TAURI__ || {};
+                window.__TAURI__.core = window.__TAURI__.core || {};
+                window.__TAURI__.core.invoke = async (cmd, args) => {
+                    console.log('[Tauri Mock] invoke:', cmd, args);
+                    if (cmd === 'download_file') {
+                        window.parent.postMessage({ 
+                            type: 'download_request', 
+                            url: args.url, 
+                            fileName: args.fileName
+                        }, '*');
+                        return Promise.resolve();
+                    }
+                    return Promise.reject('Command not implemented: ' + cmd);
+                };
+                window.__TAURI__.invoke = window.__TAURI__.core.invoke;
+                window.__TAURI_INTERNALS__ = { postMessage: () => {} };
+                
+                console.log('[Tauri Mock] Injected, __TAURI__.core.invoke available');
+            })();
+        `;
+        
+        if (doc.head) {
+            doc.head.insertBefore(script, doc.head.firstChild);
+        } else if (doc.documentElement) {
+            doc.documentElement.appendChild(script);
+        }
+        
+        console.log('[BrowserView] Tauri mock injected successfully');
+    } catch (err) {
+        console.warn('[BrowserView] Cannot inject script (CORS):', err);
+    }
+};
+
+onMounted(() => {
+    window.addEventListener('message', handleMessage);
+    
+    const checkAndInject = setInterval(() => {
+        if (iframeRef.value) {
+            injectTauriMock();
+        }
+    }, 100);
+    
+    setTimeout(() => clearInterval(checkAndInject), 5000);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('message', handleMessage);
+});
 
 const handleIframeLoad = () => {
     isLoading.value = false;
+    injectTauriMock();
+    setTimeout(injectTauriMock, 100);
+    setTimeout(injectTauriMock, 500);
 };
 
 const handleIframeError = () => {

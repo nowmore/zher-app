@@ -2,34 +2,19 @@
   <footer
     class="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-40 select-none"
     style="padding-bottom: env(safe-area-inset-bottom, 0px);">
-    <!-- 
-      修改点 1: 
-      grid-cols-4 -> grid-cols-5 
-      将总宽度分为 5 等份
-    -->
-    <nav class="grid grid-cols-5 items-center h-18 px-0">
 
-      <!-- 1. Zher 按钮 -->
-      <!-- 
-        修改点 2: 
-        添加 col-span-2
-        让它占据 2/5 的空间，实现“更宽”的效果
-      -->
+    <nav class="grid grid-cols-5 items-center h-18 px-0">
       <button @click="switchPage('zher')"
         class="clean-btn col-span-2 flex flex-col items-center justify-center w-full h-full transition-all duration-300 group">
-        <span class="font-mono font-black italic tracking-tighter text-2xl transition-all duration-300" :class="activePage === 'zher'
+        <span class="font-mono font-black tracking-tighter text-2xl transition-all duration-300" :class="activePage === 'zher'
           ? 'text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 scale-110'
           : 'text-gray-400 dark:text-gray-600 group-hover:text-gray-600 dark:group-hover:text-gray-400'">
-          Zher
+          zhe'r
         </span>
-        <span class="w-1.5 h-1.5 rounded-full mt-1 transition-all duration-300"
-          :class="activePage === 'zher' ? 'bg-blue-600 dark:bg-blue-400 opacity-100' : 'opacity-0'"></span>
+        <!-- <span class="w-1.5 h-1.5 rounded-full mt-1 transition-all duration-300"
+          :class="activePage === 'zher' ? 'bg-blue-600 dark:bg-blue-400 opacity-100' : 'opacity-0'"></span> -->
       </button>
 
-      <!-- 2. 其余三个图标 -->
-      <!-- 它们默认占 1 份 (col-span-1)，无需额外修改，自动平分剩下的 3/5 空间 -->
-
-      <!-- 下载按钮 -->
       <button @click="switchPage('download')"
         class="clean-btn flex flex-col items-center justify-center w-full h-full py-2 px-1 transition-all duration-300 group relative"
         :class="activePage === 'download' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'">

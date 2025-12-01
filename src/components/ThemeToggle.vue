@@ -23,12 +23,12 @@ import { initTheme, toggleTheme } from '../utils/theme';
 const isDarkMode = ref(false);
 
 // 切换主题
-const toggleDarkMode = () => {
-  isDarkMode.value = toggleTheme();
+const toggleDarkMode = async () => {
+  isDarkMode.value = await toggleTheme();
 };
 
 // 初始化主题
-onMounted(() => {
-  isDarkMode.value = initTheme();
+onMounted(async () => {
+  isDarkMode.value = await initTheme();
 });
 </script>

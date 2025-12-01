@@ -1,7 +1,7 @@
 <template>
-  <div class="flex flex-col min-h-full">
+  <div class="flex-col min-h-full flex">
     <!-- Browser Interface Overlay -->
-    <BrowserView v-if="activePage === 'zher' && currentBrowserUrl" :url="currentBrowserUrl" @close="closeBrowser" />
+    <BrowserView v-show="activePage === 'zher' && currentBrowserUrl" :url="currentBrowserUrl" @close="closeBrowser" />
 
     <!-- Scanner Interface Overlay -->
     <ScannerView v-if="isScannerOpen" @scan-success="handleScanSuccess" @close="closeScanner" />
@@ -24,22 +24,13 @@
       </div>
 
       <!-- Download Interface -->
-      <div v-else-if="activePage === 'download'" class="max-w-md mx-auto text-center pt-16">
-        <h2 class="text-2xl font-bold mb-6">下载</h2>
-        <p class="text-gray-600 dark:text-gray-400">下载功能页面</p>
-      </div>
+      <DownloadScreen v-else-if="activePage === 'download'" />
 
       <!-- Service Interface -->
-      <div v-else-if="activePage === 'service'" class="max-w-md mx-auto text-center pt-16">
-        <h2 class="text-2xl font-bold mb-6">服务</h2>
-        <p class="text-gray-600 dark:text-gray-400">服务功能页面</p>
-      </div>
+      <ServiceScreen v-else-if="activePage === 'service'" />
 
       <!-- Settings Interface -->
-      <div v-else-if="activePage === 'settings'" class="max-w-md mx-auto text-center pt-16">
-        <h2 class="text-2xl font-bold mb-6">设置</h2>
-        <p class="text-gray-600 dark:text-gray-400">设置功能页面</p>
-      </div>
+      <SettingsScreen v-else-if="activePage === 'settings'" />
     </main>
 
     <!-- Bottom Navigation -->
@@ -69,6 +60,9 @@ import AddressInput from './AddressInput.vue';
 import BottomNav from './BottomNav.vue';
 import BrowserView from './BrowserView.vue';
 import ScannerView from './ScannerView.vue';
+import DownloadScreen from './DownloadScreen.vue';
+import SettingsScreen from './SettingsScreen.vue';
+import ServiceScreen from './ServiceScreen.vue';
 import { scanQRCode, connectToServer } from '../utils/server';
 
 // State
@@ -102,12 +96,35 @@ const closeBrowser = () => {
   currentBrowserUrl.value = '';
 };
 
-// Watch for page changes to auto-close browser
-watch(activePage, (newPage, oldPage) => {
-  if (newPage !== 'zher' && currentBrowserUrl.value) {
-    closeBrowser();
-  }
+// Handle Android Back Button
+onMounted(async () => {
+  window.addEventListener('android-back', handleAndroidBack);
 });
+
+onUnmounted(() => {
+  window.removeEventListener('android-back', handleAndroidBack);
+});
+
+const handleAndroidBack = async () => {
+  if (isScannerOpen.value) {
+    closeScanner();
+    return;
+  }
+
+  if (activePage.value === 'zher' && currentBrowserUrl.value) {
+    closeBrowser();
+    return;
+  }
+
+  // Default: Exit App
+  try {
+    // Dynamic import to avoid build issues on non-tauri envs if any
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().close();
+  } catch (e) {
+    console.error('Failed to close app', e);
+  }
+};
 
 /**
  * Handles QR Code scanning

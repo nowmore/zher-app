@@ -8,6 +8,13 @@
     "main"
   ],
   "permissions": [
-    "barcode-scanner:default"
+    "barcode-scanner:default",
+    "fs:default",
+    "fs:allow-appconfig-read-recursive",
+    "fs:allow-appconfig-write-recursive",
+    "fs:allow-download-write-recursive",
+    "fs:allow-download-read-recursive",
+    "http:default",
+    "store:default"
   ]
 }
