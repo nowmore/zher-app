@@ -1,104 +1,103 @@
-import { reactive } from 'vue';
-import { create, BaseDirectory } from '@tauri-apps/plugin-fs';
-import { fetch } from '@tauri-apps/plugin-http';
-import { saveSetting, getSetting } from './appStore';
+import { ref } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 
-export const downloadState = reactive({
-    tasks: []
-});
+export const activeDownloads = ref(new Map());
 
-const saveTasks = async () => {
-    await saveSetting('download_history', JSON.parse(JSON.stringify(downloadState.tasks)));
-};
-
-export const initDownloadManager = async () => {
-    // Load history
-    try {
-        const savedTasks = await getSetting('download_history');
-        if (savedTasks && Array.isArray(savedTasks)) {
-            downloadState.tasks = savedTasks.map(t => {
-                if (t.status === 'downloading' || t.status === 'pending') {
-                    return { ...t, status: 'interrupted' };
-                }
-                return t;
-            });
-        }
-    } catch (e) {
-        console.warn('Failed to load download history', e);
-    }
-
-    // Setup Rust Event Listeners
-    listen('download-started', (event) => {
+export async function initDownloadManager() {
+    await listen('download-started', (event) => {
         const { id, name, size } = event.payload;
-        const task = {
+        activeDownloads.value.set(id, {
             id,
             name,
-            url: '', // URL not sent back in event, maybe not needed for display
             size,
             received: 0,
-            status: 'downloading',
-            progress: 0
-        };
-        downloadState.tasks.unshift(task);
-        saveTasks();
+            progress: 0,
+            status: 'downloading'
+        });
     });
 
-    listen('download-progress', (event) => {
+    await listen('download-progress', (event) => {
         const { id, received, total } = event.payload;
-        const task = downloadState.tasks.find(t => t.id === id);
-        if (task) {
-            task.received = received;
-            if (total > 0) {
-                task.size = total;
-                task.progress = Math.min(100, Math.round((received / total) * 100));
-            }
+        const download = activeDownloads.value.get(id);
+        if (download) {
+            download.received = received;
+            download.progress = total > 0 ? Math.round((received / total) * 100) : 0;
         }
     });
 
-    listen('download-completed', (event) => {
+    await listen('download-completed', (event) => {
         const { id } = event.payload;
-        const task = downloadState.tasks.find(t => t.id === id);
-        if (task) {
-            task.status = 'completed';
-            task.progress = 100;
-            saveTasks();
+        const download = activeDownloads.value.get(id);
+        if (download) {
+            download.status = 'completed';
+            download.progress = 100;
+            
+            setTimeout(() => {
+                activeDownloads.value.delete(id);
+            }, 3000);
         }
     });
 
-    // Listen for requests from Iframe (Mock API)
-    window.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'download_request') {
-            const { url, fileName, cookies } = event.data;
-            console.log('Calling Rust download_file:', url);
-            invoke('download_file', { url, filename: fileName }) // Map fileName to filename
-                .catch(err => console.error('Rust download failed:', err));
+    await listen('download-paused', (event) => {
+        const { id } = event.payload;
+        const download = activeDownloads.value.get(id);
+        if (download) {
+            download.status = 'paused';
         }
     });
 
-    // Legacy Handler (Fallback for <a> tags intercepted by Kotlin)
-    // We can route this to Rust too for consistency
-    window.handleDownloadRequest = async (url, disposition, mime, length, cookies) => {
-        console.log('Legacy Download requested:', url);
-        // Determine Filename
-        let filename = 'download';
-        try {
-            if (disposition && disposition.indexOf('filename=') !== -1) {
-                const match = disposition.match(/filename="?([^"]+)"?/);
-                if (match && match[1]) filename = match[1];
-            } else {
-                const urlPath = new URL(url).pathname;
-                const name = urlPath.split('/').pop();
-                if (name) filename = name;
-            }
-            filename = decodeURIComponent(filename);
-        } catch (e) { }
+    await listen('download-resumed', (event) => {
+        const { id } = event.payload;
+        const download = activeDownloads.value.get(id);
+        if (download) {
+            download.status = 'downloading';
+        }
+    });
 
-        filename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    await listen('download-failed', (event) => {
+        const { id, error } = event.payload;
+        const download = activeDownloads.value.get(id);
+        if (download) {
+            download.status = 'failed';
+            download.error = error;
+            
+            setTimeout(() => {
+                activeDownloads.value.delete(id);
+            }, 5000);
+        }
+    });
+}
 
-        // Use Rust command
-        invoke('download_file', { url, filename })
-            .catch(err => console.error('Rust download failed:', err));
-    };
-};
+export async function pauseDownload(id) {
+    try {
+        await invoke('pause_download', { taskId: id });
+    } catch (err) {
+        console.error('Failed to pause download:', err);
+    }
+}
+
+export async function resumeDownload(id) {
+    try {
+        await invoke('resume_download', { taskId: id });
+    } catch (err) {
+        console.error('Failed to resume download:', err);
+    }
+}
+
+export async function cancelDownload(id) {
+    try {
+        await invoke('cancel_download', { taskId: id });
+        activeDownloads.value.delete(id);
+    } catch (err) {
+        console.error('Failed to cancel download:', err);
+    }
+}
+
+export function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}

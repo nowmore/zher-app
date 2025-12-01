@@ -6536,7 +6536,10 @@ name = "zhe-app"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "jni",
  "log",
+ "mime_guess",
+ "ndk-context",
  "reqwest",
  "serde",
  "serde_json",
@@ -6550,6 +6553,7 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-store",
  "tokio",
+ "url",
  "zher",
 ]
 
