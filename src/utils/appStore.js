@@ -24,10 +24,11 @@ export const saveSetting = async (key, value) => {
 /**
  * Get a value from the store
  * @param {string} key 
+ * @param {any} defaultValue
  * @returns {Promise<any>}
  */
-export const getSetting = async (key) => {
-    return cache[key];
+export const getSetting = async (key, defaultValue = null) => {
+    return cache[key] !== undefined ? cache[key] : defaultValue;
 };
 
 const persist = async () => {

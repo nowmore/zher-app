@@ -116,7 +116,6 @@ import BrowserView from './BrowserView.vue';
 import ScannerView from './ScannerView.vue';
 import DownloadScreen from './DownloadScreen.vue';
 import SettingsScreen from './SettingsScreen.vue';
-import ServiceScreen from './ServiceScreen.vue';
 
 const activePage = ref('zher');
 const currentBrowserUrl = ref('');

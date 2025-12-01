@@ -50,7 +50,7 @@ const handleMessage = async (event) => {
         const { url, fileName } = event.data;
         console.log('Received download request:', url, fileName);
         console.log('Calling Rust download_file:', url);
-        
+
         try {
             await invoke('download_file', { url, filename: fileName });
             console.log('Download started successfully');
@@ -65,14 +65,14 @@ const handleMessage = async (event) => {
 
 const injectTauriMock = () => {
     if (!iframeRef.value) return;
-    
+
     try {
         const doc = iframeRef.value.contentDocument || iframeRef.value.contentWindow?.document;
         if (!doc) return;
-        
+
         const existingScript = doc.getElementById('tauri-mock-script');
         if (existingScript) return;
-        
+
         const script = doc.createElement('script');
         script.id = 'tauri-mock-script';
         script.textContent = `
@@ -100,13 +100,13 @@ const injectTauriMock = () => {
                 console.log('[Tauri Mock] Injected, __TAURI__.core.invoke available');
             })();
         `;
-        
+
         if (doc.head) {
             doc.head.insertBefore(script, doc.head.firstChild);
         } else if (doc.documentElement) {
             doc.documentElement.appendChild(script);
         }
-        
+
         console.log('[BrowserView] Tauri mock injected successfully');
     } catch (err) {
         console.warn('[BrowserView] Cannot inject script (CORS):', err);
@@ -115,13 +115,13 @@ const injectTauriMock = () => {
 
 onMounted(() => {
     window.addEventListener('message', handleMessage);
-    
+
     const checkAndInject = setInterval(() => {
         if (iframeRef.value) {
             injectTauriMock();
         }
     }, 100);
-    
+
     setTimeout(() => clearInterval(checkAndInject), 5000);
 });
 
