@@ -1,0 +1,26 @@
+{
+  "name": "zhe-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "npm run tauri -- android build --target aarch64",
+    "debug": "npm run tauri -- android dev",
+    "dev": "vite",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.1",
+    "@tauri-apps/plugin-barcode-scanner": "^2.4.2",
+    "@tauri-apps/plugin-opener": "^2.5.2",
+    "vue": "^3.5.24"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.5",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.2.4"
+  }
+}
