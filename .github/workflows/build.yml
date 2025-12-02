@@ -16,7 +16,6 @@ jobs:
     strategy:
       matrix:
         include:
-          # Linux ARM64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: zhe-app-arm64-v8a
@@ -35,11 +34,31 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: ${{ matrix.target }}
-        
-    - name: Build 
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libssl-dev pkg-config libwebkit2gtk-4.0-dev build-essential curl wget file libopenjp2-7 libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+        npm install
+
+    - name: Install Tauri CLI
+      shell: bash
+      run: |
+        npm install -g @tauri-apps/cli
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Build
       shell: bash
       run: |
         npm run build
+
+    - name: Build Android APK
+      shell: bash
+      run: |
+        npx tauri build --target ${{ matrix.target }} -- --target ${{ matrix.target }}
 
     - name: Prepare Artifact
       shell: bash
@@ -71,4 +90,4 @@ jobs:
           files: |
             artifacts/**/zhe-app*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}        
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
