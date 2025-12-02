@@ -1,4 +1,5 @@
 use futures_util::StreamExt;
+use mime_guess;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -6,7 +7,6 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::{mpsc, Mutex};
-use mime_guess;
 
 #[derive(Clone, serde::Serialize)]
 pub struct DownloadProgress {
@@ -54,14 +54,14 @@ impl Clone for DownloadState {
 
 fn get_unique_filename(dir: &PathBuf, filename: &str) -> String {
     let path = dir.join(filename);
-    
+
     if !path.exists() {
         return filename.to_string();
     }
-    
+
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    
+
     let mut counter = 1;
     loop {
         let new_name = if ext.is_empty() {
@@ -69,7 +69,7 @@ fn get_unique_filename(dir: &PathBuf, filename: &str) -> String {
         } else {
             format!("{}({}).{}", stem, counter, ext)
         };
-        
+
         let new_path = dir.join(&new_name);
         if !new_path.exists() {
             return new_name;
@@ -90,16 +90,16 @@ pub async fn download_file(
         use std::path::PathBuf;
         PathBuf::from("/storage/emulated/0/Download")
     };
-    
+
     #[cfg(not(target_os = "android"))]
     let download_path = app.path().download_dir().map_err(|e| e.to_string())?;
-    
+
     log::info!("Download directory: {:?}", download_path);
-    
+
     tokio::fs::create_dir_all(&download_path)
         .await
         .map_err(|e| format!("Failed to create download dir: {}", e))?;
-    
+
     let unique_filename = get_unique_filename(&download_path, &filename);
     let file_path = download_path.join(&unique_filename);
     let temp_path = download_path.join(format!("{}.part", unique_filename));
@@ -110,22 +110,25 @@ pub async fn download_file(
         .as_millis() as u64;
 
     let (control_tx, mut control_rx) = mpsc::unbounded_channel();
-    
+
     {
         let mut active = download_state.active_downloads.lock().await;
-        active.insert(task_id, ActiveDownload {
-            control_tx: control_tx.clone(),
-            url: url.clone(),
-            filename: unique_filename.clone(),
-            path: file_path.to_string_lossy().to_string(),
-        });
+        active.insert(
+            task_id,
+            ActiveDownload {
+                control_tx: control_tx.clone(),
+                url: url.clone(),
+                filename: unique_filename.clone(),
+                path: file_path.to_string_lossy().to_string(),
+            },
+        );
     }
 
     let app_clone = app.clone();
     let download_state_clone = download_state.inner().clone();
     let file_path_clone = file_path.clone();
     let temp_path_clone = temp_path.clone();
-    
+
     tokio::spawn(async move {
         let result = download_task(
             app_clone.clone(),
@@ -133,16 +136,22 @@ pub async fn download_file(
             url,
             temp_path_clone.clone(),
             &mut control_rx,
-        ).await;
-        
+        )
+        .await;
+
         match result {
             Ok(total_size) => {
                 if let Err(e) = tokio::fs::rename(&temp_path_clone, &file_path_clone).await {
                     log::error!("Failed to rename temp file: {}", e);
-                    app_clone.emit("download-failed", serde_json::json!({ "id": task_id, "error": "Failed to save file" })).unwrap_or(());
+                    app_clone
+                        .emit(
+                            "download-failed",
+                            serde_json::json!({ "id": task_id, "error": "Failed to save file" }),
+                        )
+                        .unwrap_or(());
                 } else {
                     log::info!("File saved to: {:?}", file_path_clone);
-                    
+
                     let record = DownloadRecord {
                         id: task_id.to_string(),
                         filename: unique_filename.clone(),
@@ -153,31 +162,42 @@ pub async fn download_file(
                             .unwrap()
                             .as_millis() as i64,
                     };
-                    
+
                     {
                         let mut records = download_state_clone.records.lock().await;
                         records.push(record.clone());
                         let records_clone = records.clone();
                         drop(records);
-                        
+
                         let app_clone2 = app_clone.clone();
                         tokio::spawn(async move {
                             save_downloads(&app_clone2, &records_clone).await;
                         });
                     }
-                    
-                    app_clone.emit("download-completed", serde_json::json!({ "id": task_id })).unwrap_or(());
+
+                    app_clone
+                        .emit("download-completed", serde_json::json!({ "id": task_id }))
+                        .unwrap_or(());
                 }
             }
             Err(e) => {
                 log::error!("Download failed: {}", e);
-                app_clone.emit("download-failed", serde_json::json!({ "id": task_id, "error": e })).unwrap_or(());
+                app_clone
+                    .emit(
+                        "download-failed",
+                        serde_json::json!({ "id": task_id, "error": e }),
+                    )
+                    .unwrap_or(());
             }
         }
-        
-        download_state_clone.active_downloads.lock().await.remove(&task_id);
+
+        download_state_clone
+            .active_downloads
+            .lock()
+            .await
+            .remove(&task_id);
     });
-    
+
     Ok(task_id.to_string())
 }
 
@@ -188,21 +208,34 @@ async fn download_task(
     temp_path: PathBuf,
     control_rx: &mut mpsc::UnboundedReceiver<DownloadControl>,
 ) -> Result<u64, String> {
-    let client = reqwest::Client::new();
-    
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .build()
+        .map_err(|e| e.to_string())?;
+
     let existing_size = if temp_path.exists() {
-        tokio::fs::metadata(&temp_path).await.map(|m| m.len()).unwrap_or(0)
+        tokio::fs::metadata(&temp_path)
+            .await
+            .map(|m| m.len())
+            .unwrap_or(0)
     } else {
         0
     };
-    
+
     let mut request = client.get(&url);
     if existing_size > 0 {
         request = request.header("Range", format!("bytes={}-", existing_size));
     }
-    
+
     let response = request.send().await.map_err(|e| e.to_string())?;
-    
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
+    }
+
     let total_size = if let Some(content_range) = response.headers().get("content-range") {
         content_range
             .to_str()
@@ -213,7 +246,7 @@ async fn download_task(
     } else {
         response.content_length().unwrap_or(0)
     };
-    
+
     app.emit(
         "download-started",
         serde_json::json!({
@@ -223,22 +256,24 @@ async fn download_task(
         }),
     )
     .unwrap_or(());
-    
+
     let mut file = tokio::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&temp_path)
         .await
         .map_err(|e| e.to_string())?;
-    
+
     if existing_size > 0 {
-        file.seek(tokio::io::SeekFrom::End(0)).await.map_err(|e| e.to_string())?;
+        file.seek(tokio::io::SeekFrom::End(0))
+            .await
+            .map_err(|e| e.to_string())?;
     }
-    
+
     let mut stream = response.bytes_stream();
     let mut received = existing_size;
     let mut paused = false;
-    
+
     loop {
         tokio::select! {
             control = control_rx.recv() => {
@@ -262,7 +297,7 @@ async fn download_task(
                     Some(Ok(chunk)) => {
                         file.write_all(&chunk).await.map_err(|e| e.to_string())?;
                         received += chunk.len() as u64;
-                        
+
                         app.emit(
                             "download-progress",
                             DownloadProgress {
@@ -294,7 +329,10 @@ pub async fn pause_download(
 ) -> Result<(), String> {
     let active = download_state.active_downloads.lock().await;
     if let Some(download) = active.get(&task_id) {
-        download.control_tx.send(DownloadControl::Pause).map_err(|e| e.to_string())?;
+        download
+            .control_tx
+            .send(DownloadControl::Pause)
+            .map_err(|e| e.to_string())?;
         Ok(())
     } else {
         Err("Download not found".to_string())
@@ -308,7 +346,10 @@ pub async fn resume_download(
 ) -> Result<(), String> {
     let active = download_state.active_downloads.lock().await;
     if let Some(download) = active.get(&task_id) {
-        download.control_tx.send(DownloadControl::Resume).map_err(|e| e.to_string())?;
+        download
+            .control_tx
+            .send(DownloadControl::Resume)
+            .map_err(|e| e.to_string())?;
         Ok(())
     } else {
         Err("Download not found".to_string())
@@ -322,7 +363,10 @@ pub async fn cancel_download(
 ) -> Result<(), String> {
     let active = download_state.active_downloads.lock().await;
     if let Some(download) = active.get(&task_id) {
-        download.control_tx.send(DownloadControl::Cancel).map_err(|e| e.to_string())?;
+        download
+            .control_tx
+            .send(DownloadControl::Cancel)
+            .map_err(|e| e.to_string())?;
         Ok(())
     } else {
         Err("Download not found".to_string())
@@ -330,7 +374,9 @@ pub async fn cancel_download(
 }
 
 #[tauri::command]
-pub async fn get_downloads(download_state: State<'_, DownloadState>) -> Result<Vec<DownloadRecord>, String> {
+pub async fn get_downloads(
+    download_state: State<'_, DownloadState>,
+) -> Result<Vec<DownloadRecord>, String> {
     let records = download_state.records.lock().await;
     Ok(records.clone())
 }
@@ -343,7 +389,7 @@ pub async fn delete_download(
 ) -> Result<(), String> {
     let (path, records) = {
         let mut records = download_state.records.lock().await;
-        
+
         if let Some(pos) = records.iter().position(|r| r.id == id) {
             let record = records.remove(pos);
             let path = record.path.clone();
@@ -352,12 +398,12 @@ pub async fn delete_download(
             (None, records.clone())
         }
     };
-    
+
     if let Some(path) = path {
         let _ = tokio::fs::remove_file(&path).await;
         save_downloads(&app, &records).await;
     }
-    
+
     Ok(())
 }
 
@@ -372,25 +418,25 @@ pub async fn delete_all_downloads(
         records.clear();
         paths
     };
-    
+
     for path in paths {
         let _ = tokio::fs::remove_file(&path).await;
     }
-    
+
     save_downloads(&app, &[]).await;
-    
+
     Ok(())
 }
 
 #[tauri::command]
 pub async fn open_download_file(app: AppHandle, path: String) -> Result<(), String> {
     log::info!("Attempting to open file: {}", path);
-    
+
     if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         log::error!("File not found: {}", path);
         return Err("File not found".to_string());
     }
-    
+
     use tauri_plugin_opener::OpenerExt;
     app.opener()
         .open_url(&path, None::<&str>)
@@ -408,35 +454,39 @@ pub async fn rename_download(
     if new_name.trim().is_empty() {
         return Err("Invalid filename".to_string());
     }
-    
+
     let (old_path, new_path, records) = {
         let mut records = download_state.records.lock().await;
-        
+
         if let Some(record) = records.iter_mut().find(|r| r.id == id) {
             let old_path = PathBuf::from(&record.path);
             let parent = old_path.parent().ok_or("Invalid path")?;
             let new_path = parent.join(&new_name);
-            
+
             if new_path.exists() {
                 return Err("File already exists".to_string());
             }
-            
+
             let old_path_str = record.path.clone();
             record.filename = new_name.clone();
             record.path = new_path.to_string_lossy().to_string();
-            
-            (old_path_str, new_path.to_string_lossy().to_string(), records.clone())
+
+            (
+                old_path_str,
+                new_path.to_string_lossy().to_string(),
+                records.clone(),
+            )
         } else {
             return Err("Download not found".to_string());
         }
     };
-    
+
     tokio::fs::rename(&old_path, &new_path)
         .await
         .map_err(|e| format!("Failed to rename file: {}", e))?;
-    
+
     save_downloads(&app, &records).await;
-    
+
     Ok(())
 }
 
@@ -445,12 +495,12 @@ pub async fn share_download(app: AppHandle, path: String) -> Result<(), String> 
     if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         return Err("File not found".to_string());
     }
-    
+
     #[cfg(target_os = "android")]
     {
         share_file_android(&app, &path).await
     }
-    
+
     #[cfg(not(target_os = "android"))]
     {
         Err("Share not supported on this platform".to_string())
@@ -461,58 +511,118 @@ pub async fn share_download(app: AppHandle, path: String) -> Result<(), String> 
 async fn share_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
     use jni::objects::{JObject, JValue};
     use jni::JavaVM;
-    
+
     let path_owned = path.to_string();
     let app_identifier = app.config().identifier.clone();
-    
-    app.run_on_main_thread(move || {
-        unsafe {
-            let vm = JavaVM::from_raw(ndk_context::android_context().vm().cast()).unwrap();
-            let mut env = vm.attach_current_thread().unwrap();
-            
-            let activity = JObject::from_raw(ndk_context::android_context().context().cast());
-            
-            let file_path = env.new_string(&path_owned).unwrap();
-            let file_class = env.find_class("java/io/File").unwrap();
-            let file = env.new_object(file_class, "(Ljava/lang/String;)V", &[JValue::Object(&file_path)]).unwrap();
-            
-            let provider_class = env.find_class("androidx/core/content/FileProvider").unwrap();
-            let authority = env.new_string(format!("{}.fileprovider", app_identifier)).unwrap();
-            
-            let uri = env.call_static_method(
+
+    app.run_on_main_thread(move || unsafe {
+        let vm = JavaVM::from_raw(ndk_context::android_context().vm().cast()).unwrap();
+        let mut env = vm.attach_current_thread().unwrap();
+
+        let activity = JObject::from_raw(ndk_context::android_context().context().cast());
+
+        let file_path = env.new_string(&path_owned).unwrap();
+        let file_class = env.find_class("java/io/File").unwrap();
+        let file = env
+            .new_object(
+                file_class,
+                "(Ljava/lang/String;)V",
+                &[JValue::Object(&file_path)],
+            )
+            .unwrap();
+
+        let provider_class = env
+            .find_class("androidx/core/content/FileProvider")
+            .unwrap();
+        let authority = env
+            .new_string(format!("{}.fileprovider", app_identifier))
+            .unwrap();
+
+        let uri = env
+            .call_static_method(
                 provider_class,
                 "getUriForFile",
                 "(Landroid/content/Context;Ljava/lang/String;Ljava/io/File;)Landroid/net/Uri;",
-                &[JValue::Object(&activity), JValue::Object(&authority), JValue::Object(&file)]
-            ).unwrap().l().unwrap();
-            
-            let mime_type = mime_guess::from_path(&path_owned).first_or_octet_stream().to_string();
-            let mime_str = env.new_string(mime_type).unwrap();
-            
-            let intent_class = env.find_class("android/content/Intent").unwrap();
-            let action_send = env.get_static_field(&intent_class, "ACTION_SEND", "Ljava/lang/String;").unwrap().l().unwrap();
-            let intent = env.new_object(&intent_class, "(Ljava/lang/String;)V", &[JValue::Object(&action_send)]).unwrap();
-            
-            env.call_method(&intent, "setType", "(Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&mime_str)]).unwrap();
-            
-            let extra_stream = env.get_static_field(&intent_class, "EXTRA_STREAM", "Ljava/lang/String;").unwrap().l().unwrap();
-            env.call_method(&intent, "putExtra", "(Ljava/lang/String;Landroid/os/Parcelable;)Landroid/content/Intent;", 
-                &[JValue::Object(&extra_stream), JValue::Object(&uri)]).unwrap();
-            
-            let flag_grant_read = 0x00000001i32;
-            env.call_method(&intent, "addFlags", "(I)Landroid/content/Intent;", &[JValue::Int(flag_grant_read)]).unwrap();
-            
-            let chooser_title = env.new_string("Share File").unwrap();
-            let chooser = env.call_static_method(
+                &[
+                    JValue::Object(&activity),
+                    JValue::Object(&authority),
+                    JValue::Object(&file),
+                ],
+            )
+            .unwrap()
+            .l()
+            .unwrap();
+
+        let mime_type = mime_guess::from_path(&path_owned)
+            .first_or_octet_stream()
+            .to_string();
+        let mime_str = env.new_string(mime_type).unwrap();
+
+        let intent_class = env.find_class("android/content/Intent").unwrap();
+        let action_send = env
+            .get_static_field(&intent_class, "ACTION_SEND", "Ljava/lang/String;")
+            .unwrap()
+            .l()
+            .unwrap();
+        let intent = env
+            .new_object(
+                &intent_class,
+                "(Ljava/lang/String;)V",
+                &[JValue::Object(&action_send)],
+            )
+            .unwrap();
+
+        env.call_method(
+            &intent,
+            "setType",
+            "(Ljava/lang/String;)Landroid/content/Intent;",
+            &[JValue::Object(&mime_str)],
+        )
+        .unwrap();
+
+        let extra_stream = env
+            .get_static_field(&intent_class, "EXTRA_STREAM", "Ljava/lang/String;")
+            .unwrap()
+            .l()
+            .unwrap();
+        env.call_method(
+            &intent,
+            "putExtra",
+            "(Ljava/lang/String;Landroid/os/Parcelable;)Landroid/content/Intent;",
+            &[JValue::Object(&extra_stream), JValue::Object(&uri)],
+        )
+        .unwrap();
+
+        let flag_grant_read = 0x00000001i32;
+        env.call_method(
+            &intent,
+            "addFlags",
+            "(I)Landroid/content/Intent;",
+            &[JValue::Int(flag_grant_read)],
+        )
+        .unwrap();
+
+        let chooser_title = env.new_string("Share File").unwrap();
+        let chooser = env
+            .call_static_method(
                 &intent_class,
                 "createChooser",
                 "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;",
-                &[JValue::Object(&intent), JValue::Object(&chooser_title)]
-            ).unwrap().l().unwrap();
-            
-            env.call_method(&activity, "startActivity", "(Landroid/content/Intent;)V", &[JValue::Object(&chooser)]).unwrap();
-        }
-    }).map_err(|e| format!("Failed to share file: {:?}", e))
+                &[JValue::Object(&intent), JValue::Object(&chooser_title)],
+            )
+            .unwrap()
+            .l()
+            .unwrap();
+
+        env.call_method(
+            &activity,
+            "startActivity",
+            "(Landroid/content/Intent;)V",
+            &[JValue::Object(&chooser)],
+        )
+        .unwrap();
+    })
+    .map_err(|e| format!("Failed to share file: {:?}", e))
 }
 
 #[tauri::command]

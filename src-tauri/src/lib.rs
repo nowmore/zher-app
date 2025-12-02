@@ -1,6 +1,7 @@
-mod download;
 mod discovery;
+mod download;
 mod server;
+mod upload;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -26,12 +27,14 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            
+
             let download_state = download::DownloadState {
                 records: Arc::new(Mutex::new(Vec::<download::DownloadRecord>::new())),
-                active_downloads: Arc::new(Mutex::new(HashMap::<u64, download::ActiveDownload>::new())),
+                active_downloads: Arc::new(Mutex::new(
+                    HashMap::<u64, download::ActiveDownload>::new(),
+                )),
             };
-            
+
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let records = download::load_downloads(&app_handle).await;
@@ -40,10 +43,11 @@ pub fn run() {
                     *locked = records;
                 }
             });
-            
+
             app.manage(download_state);
             app.manage(server::ServerState::new());
-            
+            app.manage(upload::UploadState::new());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -63,6 +67,7 @@ pub fn run() {
             server::start_server,
             server::stop_server,
             server::get_server_status,
+            upload::upload_file_chunk,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

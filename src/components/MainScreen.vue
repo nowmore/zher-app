@@ -1,6 +1,6 @@
 <template>
   <div class="flex-col min-h-full flex">
-    <BrowserView v-show="activePage === 'zher' && currentBrowserUrl" :url="currentBrowserUrl" @close="closeBrowser" />
+    <BrowserView v-if="activePage === 'zher' && currentBrowserUrl" :url="currentBrowserUrl" @close="closeBrowser" />
 
     <ScannerView v-if="isScannerOpen" @scan-success="handleScanSuccess" @close="closeScanner" />
 
@@ -80,9 +80,6 @@
       <!-- Download Interface -->
       <DownloadScreen v-else-if="activePage === 'download'" />
 
-      <!-- Service Interface -->
-      <ServiceScreen v-else-if="activePage === 'service'" />
-
       <!-- Settings Interface -->
       <SettingsScreen v-else-if="activePage === 'settings'" />
     </main>
@@ -152,8 +149,9 @@ const handleOpenBrowser = (url) => {
   try {
     const urlObj = new URL(url.includes('://') ? url : `http://${url}`);
     currentBrowserUrl.value = urlObj.href;
+    activePage.value = 'zher';
   } catch (e) {
-    console.error("Invalid URL:", url);
+    console.error('Invalid URL:', url, e);
   }
 };
 
