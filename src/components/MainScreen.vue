@@ -45,7 +45,7 @@
             </div>
 
             <!-- Discovered Services -->
-            <div v-if="services.length > 0">
+            <div v-if="services.length > 0" class="space-y-2">
               <div v-for="service in services" :key="service.url" @click="handleOpenBrowser(service.url)"
                 class="p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 active:bg-gray-50 dark:active:bg-gray-800 transition-colors">
                 <div class="flex items-center gap-3">
@@ -59,6 +59,15 @@
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-gray-900 dark:text-white">{{ service.ip }}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">端口: {{ service.port }}</p>
+                  </div>
+                  <div class="flex items-center gap-2 mr-2">
+                    <div class="w-2 h-2 rounded-full" 
+                      :class="getServiceConnectionStatus(service) ? 'bg-green-500' : 'bg-gray-400'">
+                    </div>
+                    <span class="text-xs" 
+                      :class="getServiceConnectionStatus(service) ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'">
+                      {{ getServiceConnectionStatus(service) ? '已连接' : '未连接' }}
+                    </span>
                   </div>
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
@@ -100,12 +109,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import BottomNav from './BottomNav.vue';
 import BrowserView from './BrowserView.vue';
 import DownloadScreen from './DownloadScreen.vue';
 import SettingsScreen from './SettingsScreen.vue';
+import { useGlobalSocket } from '../composables/useGlobalSocket';
 
 const activePage = ref('zher');
 const currentBrowserUrl = ref('');
@@ -115,7 +125,16 @@ const isKeyboardVisible = ref(false);
 const isServerRunning = ref(false);
 const isLoading = ref(false);
 
+const { connections } = useGlobalSocket();
+
 let initialHeight = window.innerHeight;
+
+// 获取服务的连接状态
+const getServiceConnectionStatus = (service) => {
+  const serverKey = `${service.ip}:${service.port}`;
+  const conn = connections[serverKey];
+  return conn?.isConnected || false;
+};
 
 watch(activePage, (newPage) => {
   if (newPage !== 'zher' && currentBrowserUrl.value) {

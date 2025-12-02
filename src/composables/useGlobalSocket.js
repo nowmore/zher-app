@@ -1,0 +1,316 @@
+import { reactive } from 'vue';
+import { io } from 'socket.io-client';
+import { getSetting, saveSetting } from '../utils/appStore';
+
+// 每个服务器的连接状态
+class ServerConnection {
+  constructor(serverKey) {
+    this.serverKey = serverKey;
+    this.socket = null;
+    this.users = [];
+    this.currentUser = {};
+    this.serverUrl = '';
+    this.isConnected = false;
+    this.isConnecting = false;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 10;
+    this.reconnectDelay = 2000;
+    this.reconnectTimer = null;
+    this.pingTimer = null;
+    this.messages = []; // 缓存消息
+    this.callbacks = {
+      onMessage: [],
+      onWelcome: [],
+      onStartUpload: []
+    };
+  }
+
+  addMessage(msg) {
+    this.messages.push(msg);
+    // 只保留最近 10 分钟的消息
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+    this.messages = this.messages.filter(m => m.id > tenMinutesAgo);
+    // 保存到本地存储
+    this.saveMessages();
+  }
+
+  async saveMessages() {
+    try {
+      await saveSetting(`zher_messages_${this.serverKey}`, JSON.stringify(this.messages));
+    } catch (e) {
+      console.error('Failed to save messages:', e);
+    }
+  }
+
+  async loadMessages() {
+    try {
+      const stored = await getSetting(`zher_messages_${this.serverKey}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+        this.messages = parsed.filter(m => m.id > tenMinutesAgo);
+      }
+    } catch (e) {
+      console.error('Failed to load messages:', e);
+    }
+  }
+
+  startPing() {
+    if (this.pingTimer) clearInterval(this.pingTimer);
+    this.pingTimer = setInterval(() => {
+      if (this.socket && this.isConnected) {
+        this.socket.emit('ping');
+      }
+    }, 30000);
+  }
+
+  stopPing() {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+  }
+
+  scheduleReconnect(url) {
+    if (this.reconnectTimer) return;
+
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * Math.min(this.reconnectAttempts, 5);
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      connectToServer(url);
+    }, delay);
+  }
+
+  clearReconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  disconnect() {
+    this.clearReconnect();
+    this.stopPing();
+
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
+    this.isConnected = false;
+    this.isConnecting = false;
+  }
+}
+
+// 全局连接池：key = "ip:port"
+const connections = reactive({});
+
+// 从 URL 提取服务器 key (ip:port)
+const getServerKey = (url) => {
+  try {
+    const urlObj = new URL(url);
+    return `${urlObj.hostname}:${urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80')}`;
+  } catch (e) {
+    return url;
+  }
+};
+
+const getSessionId = async () => {
+  let id = await getSetting('zher_uid');
+  if (!id) {
+    id = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    await saveSetting('zher_uid', id);
+  }
+  return id;
+};
+
+const setupSocketListeners = (conn, url) => {
+  if (!conn.socket) return;
+
+  conn.socket.on('connect', () => {
+    conn.isConnected = true;
+    conn.isConnecting = false;
+    conn.reconnectAttempts = 0;
+    conn.startPing();
+  });
+
+  conn.socket.on('disconnect', () => {
+    conn.isConnected = false;
+    conn.stopPing();
+    // 自动重连
+    if (conn.reconnectAttempts < conn.maxReconnectAttempts) {
+      conn.scheduleReconnect(url);
+    }
+  });
+
+  conn.socket.on('welcome', (data) => {
+    conn.currentUser = data.user;
+    conn.users = data.allUsers;
+    if (data.serverUrl) conn.serverUrl = data.serverUrl;
+
+    conn.callbacks.onWelcome.forEach(cb => cb(data));
+  });
+
+  conn.socket.on('user-joined', (user) => {
+    if (!conn.users.some(u => u.id === user.id)) {
+      conn.users.push(user);
+    }
+  });
+
+  conn.socket.on('user-left', (id) => {
+    conn.users = conn.users.filter(u => u.id !== id);
+  });
+
+  conn.socket.on('update-user-list', (allUsers) => {
+    let list = allUsers;
+    if (Array.isArray(allUsers) && Array.isArray(allUsers[0]) && allUsers.length === 1) {
+      list = allUsers[0];
+    }
+
+    if (Array.isArray(list)) {
+      conn.users = list;
+      const me = list.find(u => u.id === conn.currentUser.id);
+      if (me) conn.currentUser = me;
+    }
+  });
+
+  conn.socket.on('message', (msg) => {
+    // 缓存消息
+    conn.addMessage(msg);
+    // 触发回调
+    conn.callbacks.onMessage.forEach(cb => cb(msg));
+  });
+
+  conn.socket.on('start-upload', (data) => {
+    conn.callbacks.onStartUpload.forEach(cb => cb(data));
+  });
+
+  conn.socket.on('name-change-success', (newName) => {
+    conn.currentUser.name = newName;
+  });
+
+  conn.socket.on('name-change-fail', (msg) => {
+    alert(msg);
+  });
+
+  conn.socket.on('pong', () => {
+    // 心跳响应
+  });
+};
+
+const connectToServer = async (url, forceReconnect = false) => {
+  const serverKey = getServerKey(url);
+
+  // 检查是否已存在连接
+  if (connections[serverKey]) {
+    const conn = connections[serverKey];
+    // 如果已连接，直接返回
+    if (conn.isConnected && !forceReconnect) {
+      return conn;
+    }
+    // 如果需要强制重连，先断开
+    if (forceReconnect && (conn.isConnected || conn.socket)) {
+      conn.disconnect();
+    }
+    // 如果正在连接且不是强制重连，等待
+    if (conn.isConnecting && !forceReconnect) {
+      return conn;
+    }
+  } else {
+    // 创建新连接
+    connections[serverKey] = new ServerConnection(serverKey);
+  }
+
+  const conn = connections[serverKey];
+
+  // 重置重连计数器（用户主动连接时）
+  if (forceReconnect) {
+    conn.reconnectAttempts = 0;
+  }
+
+  if (conn.isConnecting) return conn;
+
+  conn.isConnecting = true;
+
+  // 加载历史消息
+  await conn.loadMessages();
+
+  try {
+    const sessionId = await getSessionId();
+
+    conn.socket = io(url, {
+      auth: { sessionId },
+      transports: ['websocket'],
+      reconnection: false // 我们自己处理重连
+    });
+
+    setupSocketListeners(conn, url);
+  } catch (error) {
+    conn.isConnecting = false;
+    conn.scheduleReconnect(url);
+  }
+
+  return conn;
+};
+
+const disconnectFromServer = (url) => {
+  const serverKey = getServerKey(url);
+  const conn = connections[serverKey];
+
+  if (conn) {
+    conn.disconnect();
+    delete connections[serverKey];
+  }
+};
+
+const getConnection = (url) => {
+  const serverKey = getServerKey(url);
+  return connections[serverKey];
+};
+
+const emit = (url, event, data) => {
+  const conn = getConnection(url);
+  if (conn && conn.socket && conn.isConnected) {
+    conn.socket.emit(event, data);
+  }
+};
+
+const requestNameChange = (url, newName) => {
+  emit(url, 'request-name-change', newName);
+};
+
+const registerCallback = (url, type, callback) => {
+  const conn = getConnection(url);
+  if (conn && conn.callbacks[type]) {
+    conn.callbacks[type].push(callback);
+  }
+};
+
+const unregisterCallback = (url, type, callback) => {
+  const conn = getConnection(url);
+  if (conn && conn.callbacks[type]) {
+    const index = conn.callbacks[type].indexOf(callback);
+    if (index > -1) {
+      conn.callbacks[type].splice(index, 1);
+    }
+  }
+};
+
+export function useGlobalSocket() {
+  return {
+    // 方法
+    connect: connectToServer,
+    disconnect: disconnectFromServer,
+    getConnection,
+    emit,
+    requestNameChange,
+    registerCallback,
+    unregisterCallback,
+
+    // 访问连接池
+    connections
+  };
+}

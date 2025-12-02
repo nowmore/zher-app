@@ -1,7 +1,11 @@
 <template>
   <div
-    class="fixed inset-0 z-30 flex flex-col font-sans overflow-hidden text-gray-800 dark:text-gray-100 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-gray-800"
-    style="padding-top: env(safe-area-inset-top, 0px); padding-bottom: 3.5rem;">
+    class="fixed inset-0 z-50 flex flex-col font-sans overflow-hidden text-gray-800 dark:text-gray-100 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-gray-800"
+    :style="{ 
+      paddingTop: 'env(safe-area-inset-top, 0px)', 
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      height: viewportHeight + 'px'
+    }">
 
     <!-- Zipping Progress -->
     <FileProgress :is-zipping="isZipping" :current-zip-name="currentZipName" :zip-progress="zipProgress" />
@@ -14,8 +18,17 @@
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
       <!-- Header -->
       <header class="bg-white dark:bg-gray-800 shadow-sm px-4 py-3 flex justify-between items-center z-10 shrink-0">
-        <h1 class="text-lg font-bold text-gray-800 dark:text-white">这儿 <span
-            class="text-sm font-normal text-gray-400 ml-2">zhe'r</span></h1>
+        <div class="flex items-center gap-3">
+          <button @click="emit('close')"
+            class="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h1 class="text-lg font-bold text-gray-800 dark:text-white">这儿 <span
+              class="text-sm font-normal text-gray-400 ml-2">zhe'r</span></h1>
+        </div>
         <button @click="showMobileUsers = true"
           class="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
           <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
@@ -39,7 +52,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { useSocket } from '../composables/useSocket';
+import { useGlobalSocket } from '../composables/useGlobalSocket';
 import { useChat } from '../composables/useChat';
 import { useFileTransfer } from '../composables/useFileTransfer';
 import { copyText as copyToClipboard } from '../utils/textUtils';
@@ -63,11 +76,22 @@ const chatContainer = ref(null);
 const inputText = ref('');
 const copiedMessageId = ref(null);
 const showMobileUsers = ref(false);
+const isEditingName = ref(false);
+const connection = ref(null);
+const viewportHeight = ref(window.innerHeight);
 
 const {
-  users, currentUser, serverUrl, isEditingName,
-  connect, disconnect, emit: socketEmit, requestNameChange
-} = useSocket();
+  connect,
+  getConnection,
+  emit: socketEmit,
+  requestNameChange: socketRequestNameChange,
+  registerCallback,
+  unregisterCallback
+} = useGlobalSocket();
+
+const users = computed(() => connection.value?.users || []);
+const currentUser = computed(() => connection.value?.currentUser || {});
+const serverUrl = computed(() => connection.value?.serverUrl || '');
 
 const { messages, loadMoreMessages, addMessage, loadChatHistory } = useChat();
 
@@ -77,7 +101,7 @@ const realSendMessage = () => {
     const fileId = Math.random().toString(36).substr(2, 9);
     addSharedFile(fileId, file);
 
-    socketEmit('file-meta', {
+    socketEmit(props.url, 'file-meta', {
       fileId,
       fileName: file.name,
       fileSize: file.size,
@@ -87,7 +111,7 @@ const realSendMessage = () => {
     inputText.value = '';
     selectedFile.value = null;
   } else if (inputText.value.trim()) {
-    socketEmit('text-message', inputText.value);
+    socketEmit(props.url, 'text-message', inputText.value);
     inputText.value = '';
   }
 
@@ -110,7 +134,7 @@ const handleFileSelect = (e) => {
 };
 
 const handleChangeName = (newName) => {
-  requestNameChange(newName);
+  socketRequestNameChange(props.url, newName);
 };
 
 const handleDownload = async (fileId, fileName) => {
@@ -118,7 +142,7 @@ const handleDownload = async (fileId, fileName) => {
     const baseUrl = props.url.endsWith('/') ? props.url.slice(0, -1) : props.url;
     const url = `${baseUrl}/api/download/${fileId}`;
     await invoke('download_file', { url, filename: fileName });
-  } catch (err) {}
+  } catch (err) { }
 };
 
 const handleCopy = (text, msgId) => {
@@ -129,7 +153,7 @@ const handleCopy = (text, msgId) => {
         copiedMessageId.value = null;
       }
     }, 2000);
-  }, () => {});
+  }, () => { });
 };
 
 const scrollToBottom = () => {
@@ -148,22 +172,85 @@ const handleScroll = (e) => {
   }
 };
 
-onMounted(async () => {
-  await loadChatHistory();
+const handleAndroidBack = () => {
+  emit('close');
+  return false; // 返回 false 表示已处理，不执行默认行为
+};
 
-  await connect(props.url, {
-    onMessage: (msg) => {
-      addMessage(msg);
-      scrollToBottom();
-    },
-    onWelcome: (data) => {
-      scrollToBottom();
-    },
-    onStartUpload: (data) => handleStartUpload(data, props.url)
+const onMessageCallback = (msg) => {
+  addMessage(msg);
+  scrollToBottom();
+};
+
+const onWelcomeCallback = (data) => {
+  scrollToBottom();
+};
+
+const onStartUploadCallback = (data) => {
+  handleStartUpload(data, props.url);
+};
+
+const handleViewportResize = () => {
+  if (window.visualViewport) {
+    viewportHeight.value = window.visualViewport.height;
+  } else {
+    viewportHeight.value = window.innerHeight;
+  }
+  // 输入法弹出时滚动到底部
+  nextTick(() => {
+    scrollToBottom();
   });
+};
+
+onMounted(async () => {
+  window.handleAndroidBack = handleAndroidBack;
+
+  // 监听 viewport 变化（输入法弹出/收起）
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handleViewportResize);
+    viewportHeight.value = window.visualViewport.height;
+  } else {
+    window.addEventListener('resize', handleViewportResize);
+  }
+
+  connection.value = getConnection(props.url);
+
+  if (!connection.value || !connection.value.isConnected) {
+    // 如果没有连接或连接已断开，强制重连
+    connection.value = await connect(props.url, true);
+  } else {
+    if (connection.value.messages && connection.value.messages.length > 0) {
+      connection.value.messages.forEach(msg => {
+        addMessage(msg);
+      });
+    }
+  }
+
+  registerCallback(props.url, 'onMessage', onMessageCallback);
+  registerCallback(props.url, 'onWelcome', onWelcomeCallback);
+  registerCallback(props.url, 'onStartUpload', onStartUploadCallback);
+
+  scrollToBottom();
 });
 
 onUnmounted(() => {
-  disconnect();
+  // 清理安卓返回键处理函数
+  if (window.handleAndroidBack === handleAndroidBack) {
+    delete window.handleAndroidBack;
+  }
+
+  // 移除 viewport 监听
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', handleViewportResize);
+  } else {
+    window.removeEventListener('resize', handleViewportResize);
+  }
+
+  // 取消注册回调
+  unregisterCallback(props.url, 'onMessage', onMessageCallback);
+  unregisterCallback(props.url, 'onWelcome', onWelcomeCallback);
+  unregisterCallback(props.url, 'onStartUpload', onStartUploadCallback);
+
+  // 注意：不断开连接，保持 WebSocket 活跃并继续接收消息
 });
 </script>

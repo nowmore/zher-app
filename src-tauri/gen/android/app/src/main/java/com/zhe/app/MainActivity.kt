@@ -45,6 +45,31 @@ class MainActivity : TauriActivity() {
     }
   }
 
+  override fun onBackPressed() {
+    appWebView?.let { webView ->
+      var handled = false
+      val js = "if(window.handleAndroidBack) { window.handleAndroidBack(); 'handled'; } else { 'default'; }"
+      
+      webView.evaluateJavascript(js) { result ->
+        if (!handled) {
+          handled = true
+          if (result == null || result == "null" || result == "\"default\"") {
+            // 将应用移到后台而不是退出
+            moveTaskToBack(true)
+          }
+        }
+      }
+      
+      // 超时保护：如果 100ms 内没有响应，将应用移到后台
+      webView.postDelayed({
+        if (!handled) {
+          handled = true
+          moveTaskToBack(true)
+        }
+      }, 100)
+    } ?: moveTaskToBack(true)
+  }
+
   private fun checkFilePermissions() {
     val permissions = arrayOf(
       Manifest.permission.READ_EXTERNAL_STORAGE,

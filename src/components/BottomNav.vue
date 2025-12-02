@@ -1,17 +1,23 @@
 <template>
   <footer
     class="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-40 select-none transition-transform duration-200"
-    :class="{ 'translate-y-full': isKeyboardVisible }"
-    style="padding-bottom: env(safe-area-inset-bottom, 0px);">
+    :class="{ 'translate-y-full': isKeyboardVisible }" style="padding-bottom: env(safe-area-inset-bottom, 0px);">
 
     <nav class="grid grid-cols-3 items-center h-18 px-0">
       <button @click="switchPage('zher')"
         class="clean-btn flex flex-col items-center justify-center w-full h-full transition-all duration-300 group">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-0.5 transition-transform duration-300 group-active:scale-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        <svg xmlns="http://www.w3.org/2000/svg"
+          class="h-6 w-6 mb-0.5 transition-transform duration-300 group-active:scale-90" fill="none" viewBox="0 0 24 24"
+          stroke="currentColor"
           :class="activePage === 'zher' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          <g fill="currentColor">
+            <path d="M10 22L13 11H9L13.5 4H16.5L15.5 11H20L10 22Z" />
+            <path d="M18.5 2L21.5 2L19.5 6L18.5 2Z" />
+          </g>
+          <!-- <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /> -->
         </svg>
-        <span class="text-[10px] font-medium" :class="activePage === 'zher' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'">快传</span>
+        <span class="text-[10px] font-medium"
+          :class="activePage === 'zher' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'">快传</span>
       </button>
 
       <button @click="switchPage('download')"
@@ -49,7 +55,6 @@
 </template>
 
 <style scoped>
-
 .clean-btn {
   outline: none !important;
   box-shadow: none !important;
