@@ -129,7 +129,6 @@ const { connections } = useGlobalSocket();
 
 let initialHeight = window.innerHeight;
 
-// 获取服务的连接状态
 const getServiceConnectionStatus = (service) => {
   const serverKey = `${service.ip}:${service.port}`;
   const conn = connections[serverKey];

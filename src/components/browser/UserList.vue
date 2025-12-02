@@ -15,7 +15,7 @@
                     </svg>
                 </button>
             </div>
-            <div class="flex-1 overflow-y-auto p-4 space-y-3">
+            <div class="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
                 <div v-for="user in sortedUsers" :key="user.id"
                     class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                     <div class="relative shrink-0">
@@ -63,13 +63,22 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- QR Code Section -->
+                <div v-if="serverUrl && qrCodeUrl" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-col items-center gap-3">
+                    <img :src="qrCodeUrl" class="w-32 h-32 rounded-lg shadow-sm bg-white p-1" alt="Server QR Code" />
+                    <div class="text-center w-full">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 break-all px-2">{{ serverUrl }}</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue';
+import { ref, computed, nextTick, watch } from 'vue';
+import QRCode from 'qrcode';
 
 const props = defineProps({
     show: {
@@ -84,6 +93,10 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    serverUrl: {
+        type: String,
+        default: '',
+    },
     isEditingName: {
         type: Boolean,
         default: false,
@@ -94,6 +107,7 @@ const emit = defineEmits(['close', 'update:isEditingName', 'change-name']);
 
 const editNameInput = ref('');
 const nameInputRef = ref(null);
+const qrCodeUrl = ref('');
 
 const sortedUsers = computed(() => {
     const me = props.users.find((u) => u.id === props.currentUser.id);
@@ -118,6 +132,18 @@ const saveName = () => {
     }
     emit('change-name', newName);
 };
+
+const generateQRCode = async () => {
+    if (props.serverUrl) {
+        try {
+            qrCodeUrl.value = await QRCode.toDataURL(props.serverUrl, { margin: 2, width: 200 });
+        } catch (err) {
+            console.error('Failed to generate QR code:', err);
+        }
+    }
+};
+
+watch(() => props.serverUrl, generateQRCode, { immediate: true });
 </script>
 
 <style scoped>

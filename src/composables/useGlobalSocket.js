@@ -2,7 +2,6 @@ import { reactive } from 'vue';
 import { io } from 'socket.io-client';
 import { getSetting, saveSetting } from '../utils/appStore';
 
-// 每个服务器的连接状态
 class ServerConnection {
   constructor(serverKey) {
     this.serverKey = serverKey;
@@ -27,10 +26,8 @@ class ServerConnection {
 
   addMessage(msg) {
     this.messages.push(msg);
-    // 只保留最近 10 分钟的消息
     const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
     this.messages = this.messages.filter(m => m.id > tenMinutesAgo);
-    // 保存到本地存储
     this.saveMessages();
   }
 
@@ -105,10 +102,8 @@ class ServerConnection {
   }
 }
 
-// 全局连接池：key = "ip:port"
 const connections = reactive({});
 
-// 从 URL 提取服务器 key (ip:port)
 const getServerKey = (url) => {
   try {
     const urlObj = new URL(url);
@@ -140,7 +135,6 @@ const setupSocketListeners = (conn, url) => {
   conn.socket.on('disconnect', () => {
     conn.isConnected = false;
     conn.stopPing();
-    // 自动重连
     if (conn.reconnectAttempts < conn.maxReconnectAttempts) {
       conn.scheduleReconnect(url);
     }
@@ -178,9 +172,7 @@ const setupSocketListeners = (conn, url) => {
   });
 
   conn.socket.on('message', (msg) => {
-    // 缓存消息
     conn.addMessage(msg);
-    // 触发回调
     conn.callbacks.onMessage.forEach(cb => cb(msg));
   });
 
@@ -197,36 +189,29 @@ const setupSocketListeners = (conn, url) => {
   });
 
   conn.socket.on('pong', () => {
-    // 心跳响应
   });
 };
 
 const connectToServer = async (url, forceReconnect = false) => {
   const serverKey = getServerKey(url);
 
-  // 检查是否已存在连接
   if (connections[serverKey]) {
     const conn = connections[serverKey];
-    // 如果已连接，直接返回
     if (conn.isConnected && !forceReconnect) {
       return conn;
     }
-    // 如果需要强制重连，先断开
     if (forceReconnect && (conn.isConnected || conn.socket)) {
       conn.disconnect();
     }
-    // 如果正在连接且不是强制重连，等待
     if (conn.isConnecting && !forceReconnect) {
       return conn;
     }
   } else {
-    // 创建新连接
     connections[serverKey] = new ServerConnection(serverKey);
   }
 
   const conn = connections[serverKey];
 
-  // 重置重连计数器（用户主动连接时）
   if (forceReconnect) {
     conn.reconnectAttempts = 0;
   }
@@ -235,7 +220,6 @@ const connectToServer = async (url, forceReconnect = false) => {
 
   conn.isConnecting = true;
 
-  // 加载历史消息
   await conn.loadMessages();
 
   try {
@@ -244,7 +228,7 @@ const connectToServer = async (url, forceReconnect = false) => {
     conn.socket = io(url, {
       auth: { sessionId },
       transports: ['websocket'],
-      reconnection: false // 我们自己处理重连
+      reconnection: false
     });
 
     setupSocketListeners(conn, url);
@@ -301,7 +285,6 @@ const unregisterCallback = (url, type, callback) => {
 
 export function useGlobalSocket() {
   return {
-    // 方法
     connect: connectToServer,
     disconnect: disconnectFromServer,
     getConnection,
@@ -310,7 +293,6 @@ export function useGlobalSocket() {
     registerCallback,
     unregisterCallback,
 
-    // 访问连接池
     connections
   };
 }

@@ -6555,6 +6555,7 @@ dependencies = [
 [[package]]
 name = "zher"
 version = "0.3.0"
+source = "git+https://github.com/nowmore/zher.git#16c575b1da7b579a871b0bdd91df865ef102992c"
 dependencies = [
  "axum",
  "bytes",

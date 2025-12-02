@@ -11,7 +11,7 @@
     <FileProgress :is-zipping="isZipping" :current-zip-name="currentZipName" :zip-progress="zipProgress" />
 
     <!-- Mobile Users List Modal -->
-    <UserList :show="showMobileUsers" :users="users" :current-user="currentUser" v-model:is-editing-name="isEditingName"
+    <UserList :show="showMobileUsers" :users="users" :current-user="currentUser" :server-url="serverUrl" v-model:is-editing-name="isEditingName"
       @close="showMobileUsers = false" @change-name="handleChangeName" />
 
     <!-- Main Content -->
@@ -196,7 +196,6 @@ const handleViewportResize = () => {
   } else {
     viewportHeight.value = window.innerHeight;
   }
-  // 输入法弹出时滚动到底部
   nextTick(() => {
     scrollToBottom();
   });
@@ -205,7 +204,6 @@ const handleViewportResize = () => {
 onMounted(async () => {
   window.handleAndroidBack = handleAndroidBack;
 
-  // 监听 viewport 变化（输入法弹出/收起）
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', handleViewportResize);
     viewportHeight.value = window.visualViewport.height;
@@ -216,7 +214,6 @@ onMounted(async () => {
   connection.value = getConnection(props.url);
 
   if (!connection.value || !connection.value.isConnected) {
-    // 如果没有连接或连接已断开，强制重连
     connection.value = await connect(props.url, true);
   } else {
     if (connection.value.messages && connection.value.messages.length > 0) {
@@ -234,23 +231,19 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  // 清理安卓返回键处理函数
   if (window.handleAndroidBack === handleAndroidBack) {
     delete window.handleAndroidBack;
   }
 
-  // 移除 viewport 监听
   if (window.visualViewport) {
     window.visualViewport.removeEventListener('resize', handleViewportResize);
   } else {
     window.removeEventListener('resize', handleViewportResize);
   }
 
-  // 取消注册回调
   unregisterCallback(props.url, 'onMessage', onMessageCallback);
   unregisterCallback(props.url, 'onWelcome', onWelcomeCallback);
   unregisterCallback(props.url, 'onStartUpload', onStartUploadCallback);
 
-  // 注意：不断开连接，保持 WebSocket 活跃并继续接收消息
 });
 </script>
