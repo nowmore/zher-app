@@ -21,11 +21,7 @@ export function useFileTransfer(sendMessage) {
 
     const handleStartUpload = async ({ fileId, transferId, offset = 0, end }, serverUrl) => {
         const file = sharedFiles.get(fileId);
-        if (!file) {
-            console.error('[useFileTransfer] File not found for fileId:', fileId);
-            console.error('[useFileTransfer] Available fileIds:', Array.from(sharedFiles.keys()));
-            return;
-        }
+        if (!file) return;
 
         try {
             let body = file;
@@ -37,20 +33,14 @@ export function useFileTransfer(sendMessage) {
             const baseUrl = serverUrl.endsWith('/') ? serverUrl.slice(0, -1) : serverUrl;
             const uploadUrl = `${baseUrl}/api/upload/${transferId}`;
             
-            const response = await fetch(uploadUrl, {
+            await fetch(uploadUrl, {
                 method: 'POST',
                 body: body,
                 headers: {
                     'Content-Type': 'application/octet-stream'
                 }
             });
-            
-            if (!response.ok) {
-                throw new Error(`Upload failed: ${response.status}`);
-            }
-        } catch (err) {
-            console.error('[useFileTransfer] Upload error:', err);
-        }
+        } catch (err) {}
     };
 
     const handleFileChange = async (e) => {
@@ -82,8 +72,6 @@ export function useFileTransfer(sendMessage) {
             });
             selectedFile.value = new File([content], zipName, { type: "application/zip" });
             sendMessage();
-        } catch (err) {
-            console.error("Zip failed", err);
         } finally {
             isZipping.value = false;
         }

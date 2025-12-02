@@ -1,7 +1,6 @@
 mod discovery;
 mod download;
 mod server;
-mod upload;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -46,7 +45,6 @@ pub fn run() {
 
             app.manage(download_state);
             app.manage(server::ServerState::new());
-            app.manage(upload::UploadState::new());
 
             Ok(())
         })
@@ -66,8 +64,7 @@ pub fn run() {
             discovery::validate_service_url,
             server::start_server,
             server::stop_server,
-            server::get_server_status,
-            upload::upload_file_chunk,
+            server::get_server_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -15,6 +15,7 @@
     "fs:allow-download-write-recursive",
     "fs:allow-download-read-recursive",
     "http:default",
-    "store:default"
+    "store:default",
+    "core:window:allow-minimize"
   ]
 }

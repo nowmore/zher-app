@@ -17,7 +17,7 @@
                             </svg>
                         </div>
                         <div class="flex flex-col">
-                            <span class="text-base font-medium text-gray-900 dark:text-white">开启服务</span>
+                            <span class="text-base font-medium text-gray-900 dark:text-white">作为服务器</span>
                             <span v-if="isServiceRunning" class="text-xs text-green-600 dark:text-green-400">运行中 - http://0.0.0.0:4836</span>
                         </div>
                     </div>
@@ -123,10 +123,7 @@ const loadServerStatus = async () => {
     try {
         const status = await invoke('get_server_status');
         isServiceRunning.value = status;
-        console.log('Server status loaded:', status);
-    } catch (e) {
-        console.error('Failed to get server status:', e);
-    }
+    } catch (e) {}
 };
 
 const toggleService = async () => {
@@ -135,12 +132,9 @@ const toggleService = async () => {
     if (!isServiceRunning.value) {
         isStarting.value = true;
         try {
-            console.log('Starting server...');
             await invoke('start_server');
             isServiceRunning.value = true;
-            console.log('Server started successfully');
         } catch (e) {
-            console.error('Failed to start server:', e);
             alert('启动服务失败: ' + e);
         } finally {
             isStarting.value = false;

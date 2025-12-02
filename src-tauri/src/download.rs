@@ -1,5 +1,4 @@
 use futures_util::StreamExt;
-use mime_guess;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -25,7 +24,7 @@ pub struct DownloadRecord {
 }
 
 #[derive(Clone)]
-enum DownloadControl {
+pub(crate) enum DownloadControl {
     Pause,
     Resume,
     Cancel,
@@ -33,9 +32,6 @@ enum DownloadControl {
 
 pub struct ActiveDownload {
     pub control_tx: mpsc::UnboundedSender<DownloadControl>,
-    pub url: String,
-    pub filename: String,
-    pub path: String,
 }
 
 pub struct DownloadState {
@@ -94,8 +90,6 @@ pub async fn download_file(
     #[cfg(not(target_os = "android"))]
     let download_path = app.path().download_dir().map_err(|e| e.to_string())?;
 
-    log::info!("Download directory: {:?}", download_path);
-
     tokio::fs::create_dir_all(&download_path)
         .await
         .map_err(|e| format!("Failed to create download dir: {}", e))?;
@@ -117,9 +111,6 @@ pub async fn download_file(
             task_id,
             ActiveDownload {
                 control_tx: control_tx.clone(),
-                url: url.clone(),
-                filename: unique_filename.clone(),
-                path: file_path.to_string_lossy().to_string(),
             },
         );
     }
@@ -141,8 +132,7 @@ pub async fn download_file(
 
         match result {
             Ok(total_size) => {
-                if let Err(e) = tokio::fs::rename(&temp_path_clone, &file_path_clone).await {
-                    log::error!("Failed to rename temp file: {}", e);
+                if let Err(_) = tokio::fs::rename(&temp_path_clone, &file_path_clone).await {
                     app_clone
                         .emit(
                             "download-failed",
@@ -150,8 +140,6 @@ pub async fn download_file(
                         )
                         .unwrap_or(());
                 } else {
-                    log::info!("File saved to: {:?}", file_path_clone);
-
                     let record = DownloadRecord {
                         id: task_id.to_string(),
                         filename: unique_filename.clone(),
@@ -181,7 +169,6 @@ pub async fn download_file(
                 }
             }
             Err(e) => {
-                log::error!("Download failed: {}", e);
                 app_clone
                     .emit(
                         "download-failed",
@@ -430,10 +417,7 @@ pub async fn delete_all_downloads(
 
 #[tauri::command]
 pub async fn open_download_file(app: AppHandle, path: String) -> Result<(), String> {
-    log::info!("Attempting to open file: {}", path);
-
     if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
-        log::error!("File not found: {}", path);
         return Err("File not found".to_string());
     }
 
@@ -491,7 +475,10 @@ pub async fn rename_download(
 }
 
 #[tauri::command]
-pub async fn share_download(app: AppHandle, path: String) -> Result<(), String> {
+pub async fn share_download(
+    #[allow(unused_variables)] app: AppHandle,
+    path: String,
+) -> Result<(), String> {
     if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         return Err("File not found".to_string());
     }
@@ -553,10 +540,7 @@ async fn share_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
             .l()
             .unwrap();
 
-        let mime_type = mime_guess::from_path(&path_owned)
-            .first_or_octet_stream()
-            .to_string();
-        let mime_str = env.new_string(mime_type).unwrap();
+        let mime_str = env.new_string("application/octet-stream").unwrap();
 
         let intent_class = env.find_class("android/content/Intent").unwrap();
         let action_send = env

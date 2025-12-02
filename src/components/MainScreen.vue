@@ -1,10 +1,12 @@
 <template>
   <div class="flex-col min-h-full flex">
-    <BrowserView v-if="activePage === 'zher' && currentBrowserUrl" :url="currentBrowserUrl" @close="closeBrowser" />
+    <BrowserView v-show="currentBrowserUrl && !isScannerOpen" v-if="currentBrowserUrl" :url="currentBrowserUrl"
+      @close="closeBrowser" />
 
     <ScannerView v-if="isScannerOpen" @scan-success="handleScanSuccess" @close="closeScanner" />
 
-    <main class="flex-1 flex flex-col pb-24 overflow-y-auto">
+    <main v-show="!currentBrowserUrl && !isScannerOpen" class="flex-1 flex flex-col overflow-y-auto"
+      :style="{ paddingBottom: isKeyboardVisible ? '0' : '6rem' }">
       <div v-if="activePage === 'zher'" class="flex-1 flex flex-col">
         <header class="px-4 py-4 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
           <div class="flex items-center justify-between">
@@ -119,13 +121,21 @@ const currentBrowserUrl = ref('');
 const isScannerOpen = ref(false);
 const services = ref([]);
 const isDiscovering = ref(false);
+const isKeyboardVisible = ref(false);
+
+let initialHeight = window.innerHeight;
+
+const handleResize = () => {
+  const currentHeight = window.visualViewport?.height || window.innerHeight;
+  isKeyboardVisible.value = currentHeight < initialHeight * 0.75;
+};
 
 const refreshServices = async () => {
   isDiscovering.value = true;
   try {
     const discovered = await invoke('discover_services');
     services.value = discovered || [];
-    
+
     const stored = localStorage.getItem('zher_services');
     if (stored) {
       const storedServices = JSON.parse(stored);
@@ -135,10 +145,9 @@ const refreshServices = async () => {
         }
       });
     }
-    
+
     localStorage.setItem('zher_services', JSON.stringify(services.value));
   } catch (e) {
-    console.error('Failed to discover services:', e);
   } finally {
     isDiscovering.value = false;
   }
@@ -149,10 +158,7 @@ const handleOpenBrowser = (url) => {
   try {
     const urlObj = new URL(url.includes('://') ? url : `http://${url}`);
     currentBrowserUrl.value = urlObj.href;
-    activePage.value = 'zher';
-  } catch (e) {
-    console.error('Invalid URL:', url, e);
-  }
+  } catch (e) { }
 };
 
 const closeBrowser = () => {
@@ -175,18 +181,18 @@ const handleScanSuccess = async (content) => {
           port: urlObj.port || 4836,
           url: content
         };
-        
+
         if (!services.value.find(s => s.url === service.url)) {
           services.value.push(service);
           localStorage.setItem('zher_services', JSON.stringify(services.value));
         }
-        
+
         handleOpenBrowser(content);
       } else {
         alert('无效的服务地址');
       }
     } catch (e) {
-      console.error('Failed to validate URL:', e);
+      // Error handling
     }
   }
 };
@@ -201,41 +207,55 @@ const handleAndroidBack = async () => {
     return;
   }
 
-  if (activePage.value === 'zher' && currentBrowserUrl.value) {
+  if (currentBrowserUrl.value) {
     closeBrowser();
     return;
   }
 
+  // Minimize app if on main screen
   try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    await getCurrentWindow().close();
+    await invoke('minimize_app');
   } catch (e) {
-    console.error('Failed to close app', e);
+    console.error('Failed to minimize', e);
   }
 };
 
 onMounted(async () => {
   window.addEventListener('android-back', handleAndroidBack);
-  
+
+  initialHeight = window.innerHeight;
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handleResize);
+  } else {
+    window.addEventListener('resize', handleResize);
+  }
+
   const stored = localStorage.getItem('zher_services');
   if (stored) {
     try {
       services.value = JSON.parse(stored);
-    } catch (e) {
-      console.error('Failed to parse stored services', e);
-    }
+    } catch (e) { }
   }
-  
+
   refreshServices();
 });
 
 onUnmounted(() => {
   window.removeEventListener('android-back', handleAndroidBack);
+
+  if (unlistenBack) {
+    unlistenBack();
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', handleResize);
+  } else {
+    window.removeEventListener('resize', handleResize);
+  }
 });
 </script>
 
 <style scoped>
-/* Custom Scrollbar for Dashboard */
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(156, 163, 175, 0.5) transparent;

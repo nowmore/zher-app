@@ -54,10 +54,8 @@ import { scan, checkPermissions, requestPermissions } from '@tauri-apps/plugin-b
 
 const emit = defineEmits(['scan-success', 'close']);
 
-// Manage transparency class on body
 onMounted(async () => {
     document.body.classList.add('barcode-scanner-active');
-    // Give a small delay for UI to render before starting scan (which blocks)
     setTimeout(() => {
         startScan();
     }, 100);
@@ -69,7 +67,6 @@ onUnmounted(() => {
 
 const startScan = async () => {
     try {
-        // 1. Check Permissions
         let permission = await checkPermissions();
 
         if (permission === 'prompt' || permission === 'prompt-with-rationale') {
@@ -82,32 +79,19 @@ const startScan = async () => {
             return;
         }
 
-        // 2. Start Scan
-        // Removing windowed: true to prefer embedded mode which works with our transparency hack
-        const result = await scan({
-            formats: []
-        });
+        const result = await scan({ formats: [] });
 
-        // 3. Handle Result
         if (result.content) {
             emit('scan-success', result.content);
         } else {
             emit('close');
         }
     } catch (error) {
-        console.error('Scanning failed:', error);
         emit('close');
     }
 };
 
 const handleCancel = () => {
-    // Note: scan() promise might not cancel easily without a cancel function from plugin.
-    // But usually unmounting/destroying might help, or we just close the UI.
-    // If plugin provides a cancel method, we should call it. v2 usually has cancel().
-    // However, import { cancel } ...? 
-    // Since I assume standard scan(), I will just emit close. 
-    // If the scan is blocking, this button click might be delayed? 
-    // No, DOM events should fire. But await scan() holds the async function context.
     emit('close');
 };
 </script>
@@ -124,7 +108,6 @@ const handleCancel = () => {
 
     100% {
         transform: translateY(288px);
-        /* h-72 is 18rem = 288px */
     }
 }
 </style>

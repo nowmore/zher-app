@@ -115,11 +115,10 @@ const handleChangeName = (newName) => {
 
 const handleDownload = async (fileId, fileName) => {
   try {
-    const url = `${props.url}/api/download/${fileId}`;
+    const baseUrl = props.url.endsWith('/') ? props.url.slice(0, -1) : props.url;
+    const url = `${baseUrl}/api/download/${fileId}`;
     await invoke('download_file', { url, filename: fileName });
-  } catch (err) {
-    console.error('Download failed', err);
-  }
+  } catch (err) {}
 };
 
 const handleCopy = (text, msgId) => {
@@ -130,10 +129,7 @@ const handleCopy = (text, msgId) => {
         copiedMessageId.value = null;
       }
     }, 2000);
-  }, () => {
-    // alert('复制失败'); 
-    console.error('Copy failed');
-  });
+  }, () => {});
 };
 
 const scrollToBottom = () => {
@@ -161,7 +157,6 @@ onMounted(async () => {
       scrollToBottom();
     },
     onWelcome: (data) => {
-      // handled in store/composable mostly
       scrollToBottom();
     },
     onStartUpload: (data) => handleStartUpload(data, props.url)

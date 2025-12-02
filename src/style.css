@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Global Scanner Transparency Override */
-/* When scanner is active, make all backgrounds transparent so camera can be seen */
 body.barcode-scanner-active {
   background-color: transparent !important;
 }
@@ -12,13 +10,11 @@ body.barcode-scanner-active #app {
   background-color: transparent !important;
 }
 
-/* Target the App.vue root container */
 body.barcode-scanner-active #app>div {
   background-color: transparent !important;
   background-image: none !important;
 }
 
-/* Target MainScreen.vue root container */
 body.barcode-scanner-active main {
   background-color: transparent !important;
 }

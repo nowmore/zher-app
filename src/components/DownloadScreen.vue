@@ -17,9 +17,7 @@ const loadDownloads = async () => {
     try {
         const stored = await invoke('get_downloads');
         downloads.value = stored || [];
-    } catch (err) {
-        console.error('Failed to load downloads:', err);
-    }
+    } catch (err) {}
 };
 
 const availableCategories = computed(() => getAvailableCategories(downloads.value));
@@ -47,16 +45,13 @@ const deleteAllDownloads = async () => {
     try {
         await invoke('delete_all_downloads');
         downloads.value = [];
-    } catch (err) {
-        console.error('Failed to delete downloads:', err);
-    }
+    } catch (err) {}
 };
 
 const openFile = async (download) => {
     try {
         await invoke('open_download_file', { path: download.path });
     } catch (err) {
-        console.error('Failed to open file:', err);
         alert('无法打开文件');
     }
 };
@@ -66,9 +61,7 @@ const deleteDownload = async (download) => {
         await invoke('delete_download', { id: download.id });
         downloads.value = downloads.value.filter(d => d.id !== download.id);
         closeOptionsMenu();
-    } catch (err) {
-        console.error('Failed to delete download:', err);
-    }
+    } catch (err) {}
 };
 
 const showOptions = (download) => {
@@ -105,7 +98,6 @@ const renameFile = async () => {
         showRenameDialog.value = false;
         closeOptionsMenu();
     } catch (err) {
-        console.error('Failed to rename file:', err);
         alert('重命名失败: ' + err);
     }
 };
@@ -117,7 +109,6 @@ const shareFile = async () => {
         await invoke('share_download', { path: selectedDownload.value.path });
         closeOptionsMenu();
     } catch (err) {
-        console.error('Failed to share file:', err);
         alert('分享失败: ' + err);
     }
 };
@@ -129,7 +120,6 @@ const openWith = async () => {
         await invoke('open_with_download', { path: selectedDownload.value.path });
         closeOptionsMenu();
     } catch (err) {
-        console.error('Failed to open with:', err);
         alert('打开方式失败: ' + err);
     }
 };

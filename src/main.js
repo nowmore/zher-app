@@ -5,7 +5,6 @@ import { initDownloadManager } from './utils/downloadManager'
 import { initStore } from './utils/appStore'
 import { initDebugConsole } from './utils/debugConsole'
 
-// Initialize store and managers
 initStore().then(() => {
     initDebugConsole();
     initDownloadManager();

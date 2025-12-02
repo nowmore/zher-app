@@ -18,9 +18,7 @@ export function useChat() {
             allMessages.value = allMessages.value.filter(m => m.id > twoMinutesMore);
             try {
                 await saveSetting('zher_chat_history', JSON.stringify(allMessages.value));
-            } catch (e2) {
-                console.error("Storage full", e2);
-            }
+            } catch (e2) {}
         }
     };
 
@@ -33,7 +31,7 @@ export function useChat() {
                 const tenMinutesAgo = now - 10 * 60 * 1000;
                 allMessages.value = parsed.filter(m => m.id > tenMinutesAgo);
                 messages.value = allMessages.value.slice(-PAGE_SIZE);
-            } catch (e) { }
+            } catch (e) {}
         }
     };
 

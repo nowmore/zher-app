@@ -29,7 +29,6 @@ export function useSocket() {
         });
 
         socket.value.on('welcome', (data) => {
-            console.log('[useSocket] Received welcome:', data);
             currentUser.value = data.user;
             users.value = data.allUsers;
             if (data.serverUrl) serverUrl.value = data.serverUrl;

@@ -26,27 +26,22 @@ impl ServerState {
 }
 
 #[tauri::command]
-pub async fn start_server(
-    port: u16,
-    server_state: State<'_, ServerState>,
-) -> Result<ServerStatus, String> {
+pub async fn start_server(server_state: State<'_, ServerState>) -> Result<bool, String> {
     let mut status = server_state.status.lock().unwrap();
     
     if status.running {
-        return Err("Server already running".to_string());
+        return Ok(true);
     }
     
     status.running = true;
-    status.port = port;
-    status.url = format!("http://0.0.0.0:{}", port);
+    status.port = 4836;
+    status.url = format!("http://0.0.0.0:{}", status.port);
     
-    Ok(status.clone())
+    Ok(true)
 }
 
 #[tauri::command]
-pub async fn stop_server(
-    server_state: State<'_, ServerState>,
-) -> Result<(), String> {
+pub async fn stop_server(server_state: State<'_, ServerState>) -> Result<(), String> {
     let mut status = server_state.status.lock().unwrap();
     
     if !status.running {
@@ -61,9 +56,7 @@ pub async fn stop_server(
 }
 
 #[tauri::command]
-pub async fn get_server_status(
-    server_state: State<'_, ServerState>,
-) -> Result<ServerStatus, String> {
+pub async fn get_server_status(server_state: State<'_, ServerState>) -> Result<bool, String> {
     let status = server_state.status.lock().unwrap();
-    Ok(status.clone())
+    Ok(status.running)
 }

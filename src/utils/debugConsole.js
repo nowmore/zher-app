@@ -58,7 +58,6 @@ export const initDebugConsole = () => {
         addLog('info', args);
     };
 
-    // Listen for remote logs from iframe
     window.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'console-log') {
             const args = event.data.args || [];

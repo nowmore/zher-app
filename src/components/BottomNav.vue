@@ -1,6 +1,7 @@
 <template>
   <footer
-    class="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-40 select-none"
+    class="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-40 select-none transition-transform duration-200"
+    :class="{ 'translate-y-full': isKeyboardVisible }"
     style="padding-bottom: env(safe-area-inset-bottom, 0px);">
 
     <nav class="grid grid-cols-3 items-center h-18 px-0">
@@ -69,16 +70,14 @@
 </style>
 
 <script setup>
-import { defineProps, defineEmits, computed } from 'vue';
+import { defineProps, defineEmits, computed, ref, onMounted, onUnmounted } from 'vue';
 
-// Props
 const props = defineProps({
   modelValue: {
     type: String,
     default: 'zher'
   }
 });
-
 
 const emit = defineEmits(['update:modelValue']);
 
@@ -87,9 +86,35 @@ const activePage = computed({
   set: (value) => emit('update:modelValue', value)
 });
 
+const isKeyboardVisible = ref(false);
+
 const switchPage = (page) => {
   activePage.value = page;
 };
+
+let initialHeight = window.innerHeight;
+
+const handleResize = () => {
+  const currentHeight = window.visualViewport?.height || window.innerHeight;
+  isKeyboardVisible.value = currentHeight < initialHeight * 0.75;
+};
+
+onMounted(() => {
+  initialHeight = window.innerHeight;
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handleResize);
+  } else {
+    window.addEventListener('resize', handleResize);
+  }
+});
+
+onUnmounted(() => {
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', handleResize);
+  } else {
+    window.removeEventListener('resize', handleResize);
+  }
+});
 </script>
 
 <style scoped>

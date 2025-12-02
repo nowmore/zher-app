@@ -72,26 +72,20 @@ export async function initDownloadManager() {
 export async function pauseDownload(id) {
     try {
         await invoke('pause_download', { taskId: id });
-    } catch (err) {
-        console.error('Failed to pause download:', err);
-    }
+    } catch (err) {}
 }
 
 export async function resumeDownload(id) {
     try {
         await invoke('resume_download', { taskId: id });
-    } catch (err) {
-        console.error('Failed to resume download:', err);
-    }
+    } catch (err) {}
 }
 
 export async function cancelDownload(id) {
     try {
         await invoke('cancel_download', { taskId: id });
         activeDownloads.value.delete(id);
-    } catch (err) {
-        console.error('Failed to cancel download:', err);
-    }
+    } catch (err) {}
 }
 
 export function formatSize(bytes) {
