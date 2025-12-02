@@ -1,5 +1,6 @@
 package com.zhe.app
 
+import android.content.Intent
 import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
@@ -17,19 +18,13 @@ class MainActivity : TauriActivity() {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     checkFilePermissions()
+    val serviceIntent = Intent(this, HttpService::class.java)
+    startForegroundService(serviceIntent)
   }
 
-  override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-    if (keyCode == KeyEvent.KEYCODE_BACK) {
-      // Emit back event to JS and consume the key press
-      if (appWebView != null) {
-         appWebView!!.post {
-             appWebView!!.evaluateJavascript("window.dispatchEvent(new Event('android-back'))", null)
-         }
-         return true
-      }
-    }
-    return super.onKeyDown(keyCode, event)
+  override fun onDestroy() {
+    super.onDestroy()
+    // Don't stop service on destroy, let it run in background
   }
 
   override fun onWebViewCreate(webView: WebView) {

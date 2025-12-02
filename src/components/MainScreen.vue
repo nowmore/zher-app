@@ -1,78 +1,70 @@
 <template>
   <div class="flex-col min-h-full flex">
-    <BrowserView v-show="currentBrowserUrl && !isScannerOpen" v-if="currentBrowserUrl" :url="currentBrowserUrl"
-      @close="closeBrowser" />
+    <BrowserView v-show="currentBrowserUrl && activePage === 'zher'" v-if="currentBrowserUrl && activePage === 'zher'"
+      :url="currentBrowserUrl" @close="closeBrowser" />
 
-    <ScannerView v-if="isScannerOpen" @scan-success="handleScanSuccess" @close="closeScanner" />
-
-    <main v-show="!currentBrowserUrl && !isScannerOpen" class="flex-1 flex flex-col overflow-y-auto"
+    <main v-show="!currentBrowserUrl || activePage !== 'zher'" class="flex-1 flex flex-col overflow-y-auto"
       :style="{ paddingBottom: isKeyboardVisible ? '0' : '6rem' }">
       <div v-if="activePage === 'zher'" class="flex-1 flex flex-col">
         <header class="px-4 py-4 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
           <div class="flex items-center justify-between">
-            <h1 class="text-xl font-bold text-gray-900 dark:text-white">可用服务</h1>
-            <div class="flex items-center gap-2">
-              <button @click="refreshServices" :disabled="isDiscovering"
-                class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 disabled:opacity-50">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" :class="{ 'animate-spin': isDiscovering }"
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
-              <button @click="handleScan"
-                class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-                  stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                </svg>
-              </button>
-            </div>
+            <h1 class="text-xl font-bold text-gray-900 dark:text-white">服务</h1>
+            <button @click="refreshServices" :disabled="isDiscovering"
+              class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 disabled:opacity-50">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" :class="{ 'animate-spin': isDiscovering }"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
           </div>
         </header>
 
         <div class="flex-1 overflow-y-auto">
-          <div v-if="isDiscovering" class="flex flex-col items-center justify-center py-12">
-            <svg class="animate-spin h-8 w-8 text-blue-600 dark:text-blue-400 mb-3" xmlns="http://www.w3.org/2000/svg"
-              fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-              </path>
-            </svg>
-            <p class="text-sm text-gray-500 dark:text-gray-400">正在搜索服务...</p>
-          </div>
-
-          <div v-else-if="services.length === 0" class="flex flex-col items-center justify-center py-12 px-6">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" fill="none"
-              viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-            </svg>
-            <p class="text-sm text-gray-500 dark:text-gray-400 text-center">未发现可用服务</p>
-            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">点击刷新按钮搜索或扫描二维码添加</p>
-          </div>
-
-          <div v-else class="px-4 py-2 space-y-2">
-            <div v-for="service in services" :key="service.url" @click="handleOpenBrowser(service.url)"
-              class="p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 active:bg-gray-50 dark:active:bg-gray-800 transition-colors">
+          <div class="px-4 py-2 space-y-2">
+            <!-- Server Toggle - First Row -->
+            <div class="p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
               <div class="flex items-center gap-3">
-                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none"
+                <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600 dark:text-green-400" fill="none"
                     viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
                   </svg>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-gray-900 dark:text-white">{{ service.ip }}</p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">端口: {{ service.port }}</p>
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">作为服务器</p>
                 </div>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24"
-                  stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
+                <button @click.stop="toggleServer"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  :class="isServerRunning ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'">
+                  <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                    :class="isServerRunning ? 'translate-x-6' : 'translate-x-1'"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Discovered Services -->
+            <div v-if="services.length > 0">
+              <div v-for="service in services" :key="service.url" @click="handleOpenBrowser(service.url)"
+                class="p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 active:bg-gray-50 dark:active:bg-gray-800 transition-colors">
+                <div class="flex items-center gap-3">
+                  <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none"
+                      viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                    </svg>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ service.ip }}</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">端口: {{ service.port }}</p>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
               </div>
             </div>
           </div>
@@ -112,18 +104,24 @@ import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import BottomNav from './BottomNav.vue';
 import BrowserView from './BrowserView.vue';
-import ScannerView from './ScannerView.vue';
 import DownloadScreen from './DownloadScreen.vue';
 import SettingsScreen from './SettingsScreen.vue';
 
 const activePage = ref('zher');
 const currentBrowserUrl = ref('');
-const isScannerOpen = ref(false);
 const services = ref([]);
 const isDiscovering = ref(false);
 const isKeyboardVisible = ref(false);
+const isServerRunning = ref(false);
+const isLoading = ref(false);
 
 let initialHeight = window.innerHeight;
+
+watch(activePage, (newPage) => {
+  if (newPage !== 'zher' && currentBrowserUrl.value) {
+    currentBrowserUrl.value = '';
+  }
+});
 
 const handleResize = () => {
   const currentHeight = window.visualViewport?.height || window.innerHeight;
@@ -135,21 +133,32 @@ const refreshServices = async () => {
   try {
     const discovered = await invoke('discover_services');
     services.value = discovered || [];
-
-    const stored = localStorage.getItem('zher_services');
-    if (stored) {
-      const storedServices = JSON.parse(stored);
-      storedServices.forEach(s => {
-        if (!services.value.find(existing => existing.url === s.url)) {
-          services.value.push(s);
-        }
-      });
-    }
-
-    localStorage.setItem('zher_services', JSON.stringify(services.value));
   } catch (e) {
   } finally {
     isDiscovering.value = false;
+  }
+};
+
+const toggleServer = async () => {
+  try {
+    if (isServerRunning.value) {
+      await invoke('stop_server');
+      isServerRunning.value = false;
+    } else {
+      await invoke('start_server');
+      isServerRunning.value = true;
+      refreshServices();
+    }
+  } catch (e) {
+    console.error('Failed to toggle server:', e);
+  }
+};
+
+const checkServerStatus = async () => {
+  try {
+    isServerRunning.value = await invoke('get_server_status');
+  } catch (e) {
+    console.error('Failed to check server status:', e);
   }
 };
 
@@ -165,64 +174,7 @@ const closeBrowser = () => {
   currentBrowserUrl.value = '';
 };
 
-const handleScan = () => {
-  isScannerOpen.value = true;
-};
-
-const handleScanSuccess = async (content) => {
-  isScannerOpen.value = false;
-  if (content) {
-    try {
-      const isValid = await invoke('validate_service_url', { url: content });
-      if (isValid) {
-        const urlObj = new URL(content);
-        const service = {
-          ip: urlObj.hostname,
-          port: urlObj.port || 4836,
-          url: content
-        };
-
-        if (!services.value.find(s => s.url === service.url)) {
-          services.value.push(service);
-          localStorage.setItem('zher_services', JSON.stringify(services.value));
-        }
-
-        handleOpenBrowser(content);
-      } else {
-        alert('无效的服务地址');
-      }
-    } catch (e) {
-      // Error handling
-    }
-  }
-};
-
-const closeScanner = () => {
-  isScannerOpen.value = false;
-};
-
-const handleAndroidBack = async () => {
-  if (isScannerOpen.value) {
-    closeScanner();
-    return;
-  }
-
-  if (currentBrowserUrl.value) {
-    closeBrowser();
-    return;
-  }
-
-  // Minimize app if on main screen
-  try {
-    await invoke('minimize_app');
-  } catch (e) {
-    console.error('Failed to minimize', e);
-  }
-};
-
 onMounted(async () => {
-  window.addEventListener('android-back', handleAndroidBack);
-
   initialHeight = window.innerHeight;
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', handleResize);
@@ -230,23 +182,11 @@ onMounted(async () => {
     window.addEventListener('resize', handleResize);
   }
 
-  const stored = localStorage.getItem('zher_services');
-  if (stored) {
-    try {
-      services.value = JSON.parse(stored);
-    } catch (e) { }
-  }
-
+  await checkServerStatus();
   refreshServices();
 });
 
 onUnmounted(() => {
-  window.removeEventListener('android-back', handleAndroidBack);
-
-  if (unlistenBack) {
-    unlistenBack();
-  }
-
   if (window.visualViewport) {
     window.visualViewport.removeEventListener('resize', handleResize);
   } else {
