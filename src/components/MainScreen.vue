@@ -61,10 +61,10 @@
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">端口: {{ service.port }}</p>
                   </div>
                   <div class="flex items-center gap-2 mr-2">
-                    <div class="w-2 h-2 rounded-full" 
+                    <div class="w-2 h-2 rounded-full"
                       :class="getServiceConnectionStatus(service) ? 'bg-green-500' : 'bg-gray-400'">
                     </div>
-                    <span class="text-xs" 
+                    <span class="text-xs"
                       :class="getServiceConnectionStatus(service) ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'">
                       {{ getServiceConnectionStatus(service) ? '已连接' : '未连接' }}
                     </span>
@@ -110,6 +110,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import BottomNav from './BottomNav.vue';
 import BrowserView from './BrowserView.vue';

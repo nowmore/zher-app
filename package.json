@@ -1,7 +1,7 @@
 {
   "name": "zhe-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "build": "npm run tauri -- android build --target aarch64",
@@ -14,7 +14,7 @@
     "@tauri-apps/plugin-barcode-scanner": "^2.4.2",
     "@tauri-apps/plugin-fs": "^2.4.4",
     "@tauri-apps/plugin-http": "^2.5.4",
-    "@tauri-apps/plugin-opener": "^2.5.2",
+    "@tauri-apps/plugin-opener": "2.3.0",
     "@tauri-apps/plugin-shell": "^2.3.3",
     "@tauri-apps/plugin-store": "^2.4.1",
     "jszip": "^3.10.1",

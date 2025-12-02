@@ -417,15 +417,37 @@ pub async fn delete_all_downloads(
 
 #[tauri::command]
 pub async fn open_download_file(app: AppHandle, path: String) -> Result<(), String> {
-    if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
-        return Err("File not found".to_string());
+
+    let metadata = tokio::fs::metadata(&path).await;
+    
+    #[cfg(target_os = "android")]
+    {
+        // Check if it's a directory
+        if let Ok(meta) = metadata {
+            if meta.is_dir() {
+                // Open folder with file manager
+                return open_folder_android(&app, &path).await;
+            }
+        } else {
+            return Err("File or folder not found".to_string());
+        }
+        return Ok(());
+        // Open file
+        open_file_android(&app, &path).await
     }
 
-    use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_url(&path, None::<&str>)
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    #[cfg(not(target_os = "android"))]
+    {
+        if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+            return Err("File not found".to_string());
+        }
+        
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .open_url(&path, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -495,7 +517,91 @@ pub async fn share_download(
 }
 
 #[cfg(target_os = "android")]
-async fn share_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
+async fn open_folder_android(app: &AppHandle, path: &str) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    use jni::JavaVM;
+
+    let _path_owned = path.to_string();
+
+    app.run_on_main_thread(move || unsafe {
+        let vm = JavaVM::from_raw(ndk_context::android_context().vm().cast()).unwrap();
+        let mut env = vm.attach_current_thread().unwrap();
+
+        let activity = JObject::from_raw(ndk_context::android_context().context().cast());
+
+        // Use ACTION_GET_CONTENT to open file manager
+        let intent_class = env.find_class("android/content/Intent").unwrap();
+        let action_get_content = env
+            .get_static_field(&intent_class, "ACTION_GET_CONTENT", "Ljava/lang/String;")
+            .unwrap()
+            .l()
+            .unwrap();
+        let intent = env
+            .new_object(
+                &intent_class,
+                "(Ljava/lang/String;)V",
+                &[JValue::Object(&action_get_content)],
+            )
+            .unwrap();
+
+        // Set type to show all files
+        let mime_type = env.new_string("*/*").unwrap();
+        env.call_method(
+            &intent,
+            "setType",
+            "(Ljava/lang/String;)Landroid/content/Intent;",
+            &[JValue::Object(&mime_type)],
+        )
+        .unwrap();
+
+        // Add category to make it openable
+        let category_openable = env
+            .get_static_field(&intent_class, "CATEGORY_OPENABLE", "Ljava/lang/String;")
+            .unwrap()
+            .l()
+            .unwrap();
+        env.call_method(
+            &intent,
+            "addCategory",
+            "(Ljava/lang/String;)Landroid/content/Intent;",
+            &[JValue::Object(&category_openable)],
+        )
+        .unwrap();
+
+        let flag_activity_new_task = 0x10000000i32;
+        env.call_method(
+            &intent,
+            "addFlags",
+            "(I)Landroid/content/Intent;",
+            &[JValue::Int(flag_activity_new_task)],
+        )
+        .unwrap();
+
+        let chooser_title = env.new_string("Open file manager").unwrap();
+        let chooser = env
+            .call_static_method(
+                &intent_class,
+                "createChooser",
+                "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;",
+                &[JValue::Object(&intent), JValue::Object(&chooser_title)],
+            )
+            .unwrap()
+            .l()
+            .unwrap();
+
+        env.call_method(
+            &activity,
+            "startActivity",
+            "(Landroid/content/Intent;)V",
+            &[JValue::Object(&chooser)],
+        )
+        .unwrap();
+    })
+    .map_err(|e| format!("Failed to open file manager: {:?}", e))
+}
+
+#[cfg(target_os = "android")]
+async fn open_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
     use jni::objects::{JObject, JValue};
     use jni::JavaVM;
 
@@ -540,11 +646,30 @@ async fn share_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
             .l()
             .unwrap();
 
-        let mime_str = env.new_string("application/octet-stream").unwrap();
+        // Get MIME type
+        let extension = std::path::Path::new(&path_owned)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        
+        let mime_type = match extension.to_lowercase().as_str() {
+            "pdf" => "application/pdf",
+            "jpg" | "jpeg" => "image/jpeg",
+            "png" => "image/png",
+            "gif" => "image/gif",
+            "mp4" => "video/mp4",
+            "mp3" => "audio/mpeg",
+            "txt" => "text/plain",
+            "zip" => "application/zip",
+            "apk" => "application/vnd.android.package-archive",
+            _ => "application/octet-stream",
+        };
+        
+        let mime_str = env.new_string(mime_type).unwrap();
 
         let intent_class = env.find_class("android/content/Intent").unwrap();
-        let action_send = env
-            .get_static_field(&intent_class, "ACTION_SEND", "Ljava/lang/String;")
+        let action_view = env
+            .get_static_field(&intent_class, "ACTION_VIEW", "Ljava/lang/String;")
             .unwrap()
             .l()
             .unwrap();
@@ -552,41 +677,29 @@ async fn share_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
             .new_object(
                 &intent_class,
                 "(Ljava/lang/String;)V",
-                &[JValue::Object(&action_send)],
+                &[JValue::Object(&action_view)],
             )
             .unwrap();
 
         env.call_method(
             &intent,
-            "setType",
-            "(Ljava/lang/String;)Landroid/content/Intent;",
-            &[JValue::Object(&mime_str)],
-        )
-        .unwrap();
-
-        let extra_stream = env
-            .get_static_field(&intent_class, "EXTRA_STREAM", "Ljava/lang/String;")
-            .unwrap()
-            .l()
-            .unwrap();
-        env.call_method(
-            &intent,
-            "putExtra",
-            "(Ljava/lang/String;Landroid/os/Parcelable;)Landroid/content/Intent;",
-            &[JValue::Object(&extra_stream), JValue::Object(&uri)],
+            "setDataAndType",
+            "(Landroid/net/Uri;Ljava/lang/String;)Landroid/content/Intent;",
+            &[JValue::Object(&uri), JValue::Object(&mime_str)],
         )
         .unwrap();
 
         let flag_grant_read = 0x00000001i32;
+        let flag_activity_new_task = 0x10000000i32;
         env.call_method(
             &intent,
             "addFlags",
             "(I)Landroid/content/Intent;",
-            &[JValue::Int(flag_grant_read)],
+            &[JValue::Int(flag_grant_read | flag_activity_new_task)],
         )
         .unwrap();
 
-        let chooser_title = env.new_string("Share File").unwrap();
+        let chooser_title = env.new_string("Open with").unwrap();
         let chooser = env
             .call_static_method(
                 &intent_class,
@@ -606,7 +719,12 @@ async fn share_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
         )
         .unwrap();
     })
-    .map_err(|e| format!("Failed to share file: {:?}", e))
+    .map_err(|e| format!("Failed to open file: {:?}", e))
+}
+
+#[cfg(target_os = "android")]
+async fn share_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
+    Ok(())
 }
 
 #[tauri::command]

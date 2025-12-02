@@ -11,8 +11,10 @@
                 <div class="flex items-center justify-between py-4 border-b border-gray-100 dark:border-gray-800">
                     <div class="flex items-center gap-3">
                         <div class="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                             </svg>
                         </div>
                         <span class="text-base font-medium text-gray-900 dark:text-white">深色模式</span>
@@ -20,15 +22,18 @@
                     <button @click="handleToggleTheme"
                         class="relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none"
                         :class="isDarkMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'">
-                        <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform"
+                        <span
+                            class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform"
                             :class="isDarkMode ? 'translate-x-6' : 'translate-x-1'" />
                     </button>
                 </div>
                 <div class="flex items-center justify-between py-4 border-b border-gray-100 dark:border-gray-800">
                     <div class="flex items-center gap-3">
                         <div class="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                             </svg>
                         </div>
                         <span class="text-base font-medium text-gray-900 dark:text-white">调试模式</span>
@@ -37,7 +42,8 @@
                     <button @click="debugState.isEnabled = !debugState.isEnabled"
                         class="relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none"
                         :class="debugState.isEnabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'">
-                        <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform"
+                        <span
+                            class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform"
                             :class="debugState.isEnabled ? 'translate-x-6' : 'translate-x-1'" />
                     </button>
                 </div>
@@ -71,8 +77,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { ref, onMounted } from 'vue';
 import { initTheme, toggleTheme } from '../utils/theme';
 import { debugState, clearLogs } from '../utils/debugConsole';
 

@@ -19,3 +19,20 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep FileProvider for file sharing
+-keep class androidx.core.content.FileProvider { *; }
+-keep class androidx.core.content.** { *; }
+
+# Keep AndroidX classes used via JNI
+-keep class androidx.** { *; }
+-dontwarn androidx.**
+
+# Keep Android Intent and Uri classes
+-keep class android.content.Intent { *; }
+-keep class android.net.Uri { *; }
+
+# Keep JNI methods
+-keepclasseswithmembernames class * {
+    native <methods>;
+}

@@ -17,23 +17,23 @@ const loadDownloads = async () => {
     try {
         const stored = await invoke('get_downloads');
         downloads.value = stored || [];
-    } catch (err) {}
+    } catch (err) { }
 };
 
 const availableCategories = computed(() => getAvailableCategories(downloads.value));
 
 const filteredDownloads = computed(() => {
     let filtered = downloads.value;
-    
+
     if (selectedCategory.value !== 'ALL') {
         filtered = filtered.filter(d => getCategoryByExtension(d.filename) === selectedCategory.value);
     }
-    
+
     if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase();
         filtered = filtered.filter(d => d.filename.toLowerCase().includes(query));
     }
-    
+
     return filtered.sort((a, b) => b.timestamp - a.timestamp);
 });
 
@@ -41,18 +41,26 @@ const groupedDownloads = computed(() => groupByDate(filteredDownloads.value));
 
 const deleteAllDownloads = async () => {
     if (!confirm('确定要删除所有下载记录和文件吗？')) return;
-    
+
     try {
         await invoke('delete_all_downloads');
         downloads.value = [];
-    } catch (err) {}
+    } catch (err) { }
 };
 
 const openFile = async (download) => {
     try {
         await invoke('open_download_file', { path: download.path });
     } catch (err) {
-        alert('无法打开文件');
+        alert('打开文件失败: ' + err);
+    }
+};
+
+const openDownloadFolder = async () => {
+    try {
+        await invoke('open_download_file', { path: '/storage/emulated/0/Download' });
+    } catch (err) {
+        alert('打开文件夹失败: ' + err);
     }
 };
 
@@ -61,7 +69,7 @@ const deleteDownload = async (download) => {
         await invoke('delete_download', { id: download.id });
         downloads.value = downloads.value.filter(d => d.id !== download.id);
         closeOptionsMenu();
-    } catch (err) {}
+    } catch (err) { }
 };
 
 const showOptions = (download) => {
@@ -83,18 +91,18 @@ const openRenameDialog = () => {
 
 const renameFile = async () => {
     if (!selectedDownload.value || !newFileName.value.trim()) return;
-    
+
     try {
-        await invoke('rename_download', { 
-            id: selectedDownload.value.id, 
-            newName: newFileName.value.trim() 
+        await invoke('rename_download', {
+            id: selectedDownload.value.id,
+            newName: newFileName.value.trim()
         });
-        
+
         const index = downloads.value.findIndex(d => d.id === selectedDownload.value.id);
         if (index !== -1) {
             downloads.value[index].filename = newFileName.value.trim();
         }
-        
+
         showRenameDialog.value = false;
         closeOptionsMenu();
     } catch (err) {
@@ -104,7 +112,7 @@ const renameFile = async () => {
 
 const shareFile = async () => {
     if (!selectedDownload.value) return;
-    
+
     try {
         await invoke('share_download', { path: selectedDownload.value.path });
         closeOptionsMenu();
@@ -115,7 +123,7 @@ const shareFile = async () => {
 
 const openWith = async () => {
     if (!selectedDownload.value) return;
-    
+
     try {
         await invoke('open_with_download', { path: selectedDownload.value.path });
         closeOptionsMenu();
@@ -162,6 +170,14 @@ onMounted(() => {
                                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                     </button>
+                    <button @click="openDownloadFolder"
+                        class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                        </svg>
+                    </button>
                     <button @click="deleteAllDownloads"
                         class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
@@ -172,7 +188,7 @@ onMounted(() => {
                     </button>
                 </div>
             </div>
-            
+
             <div v-if="isSearching" class="mt-3">
                 <input v-model="searchQuery" type="text" placeholder="搜索下载..." @blur="hideSearchOnBlur"
                     class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border-none rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -207,47 +223,57 @@ onMounted(() => {
                 <div v-for="[id, download] in activeDownloads" :key="id"
                     class="mb-2 p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-medium text-gray-900 dark:text-white truncate flex-1">{{ download.name }}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white truncate flex-1">{{ download.name
+                            }}</span>
                         <div class="flex items-center gap-2">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{{ download.progress }}%</span>
                             <button v-if="download.status === 'downloading'" @click="pauseDownload(id)"
                                 class="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </button>
                             <button v-if="download.status === 'paused'" @click="resumeDownload(id)"
                                 class="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-blue-600 dark:text-blue-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </button>
                             <button @click="cancelDownload(id)"
                                 class="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-red-600 dark:text-red-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </button>
                         </div>
                     </div>
                     <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
-                        <div :class="download.status === 'paused' ? 'bg-yellow-500' : download.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'" 
+                        <div :class="download.status === 'paused' ? 'bg-yellow-500' : download.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'"
                             class="h-2 rounded-full transition-all" :style="{ width: download.progress + '%' }"></div>
                     </div>
                     <div class="flex items-center justify-between text-xs">
                         <span class="text-gray-500 dark:text-gray-400">
                             {{ formatSize(download.received) }} / {{ formatSize(download.size) }}
                         </span>
-                        <span v-if="download.status === 'paused'" class="text-yellow-600 dark:text-yellow-400">已暂停</span>
+                        <span v-if="download.status === 'paused'"
+                            class="text-yellow-600 dark:text-yellow-400">已暂停</span>
                         <span v-if="download.status === 'failed'" class="text-red-600 dark:text-red-400">下载失败</span>
                     </div>
                 </div>
             </div>
 
-            <div v-if="Object.keys(groupedDownloads).length === 0 && activeDownloads.size === 0" class="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
+            <div v-if="Object.keys(groupedDownloads).length === 0 && activeDownloads.size === 0"
+                class="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 opacity-50" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
                 </svg>
@@ -258,10 +284,9 @@ onMounted(() => {
                 <div class="px-4 py-2 bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                     <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">{{ date }}</h2>
                 </div>
-                
+
                 <div class="px-4 py-2 space-y-2">
-                    <div v-for="download in items" :key="download.id"
-                        @click="openFile(download)"
+                    <div v-for="download in items" :key="download.id" @click="openFile(download)"
                         class="p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 active:bg-gray-50 dark:active:bg-gray-800 transition-colors">
                         <div class="flex items-start gap-3">
                             <div class="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg shrink-0">
@@ -271,14 +296,19 @@ onMounted(() => {
                                         :d="getCategoryIcon(getCategoryByExtension(download.filename))" />
                                 </svg>
                             </div>
-                            
+
                             <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ download.filename }}</p>
+                                <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{
+                                    download.filename }}</p>
                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {{ formatFileSize(download.size) }} · {{ new Date(download.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}
+                                    {{ formatFileSize(download.size) }} · {{ new
+                                        Date(download.timestamp).toLocaleTimeString('zh-CN', {
+                                            hour: '2-digit', minute:
+                                                '2-digit'
+                                        }) }}
                                 </p>
                             </div>
-                            
+
                             <button @click.stop="showOptions(download)"
                                 class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
@@ -298,7 +328,8 @@ onMounted(() => {
             <div @click.stop class="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-4 space-y-2 animate-slide-up">
                 <button @click="openRenameDialog"
                     class="w-full p-4 text-left text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
@@ -306,7 +337,8 @@ onMounted(() => {
                 </button>
                 <button @click="shareFile"
                     class="w-full p-4 text-left text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                     </svg>
@@ -314,7 +346,8 @@ onMounted(() => {
                 </button>
                 <button @click="openWith"
                     class="w-full p-4 text-left text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
@@ -322,7 +355,8 @@ onMounted(() => {
                 </button>
                 <button @click="deleteDownload(selectedDownload)"
                     class="w-full p-4 text-left text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -339,7 +373,7 @@ onMounted(() => {
             class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div @click.stop class="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-6 space-y-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">重命名文件</h3>
-                <input v-model="newFileName" type="text" 
+                <input v-model="newFileName" type="text"
                     class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border-none rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <div class="flex gap-3">
                     <button @click="showRenameDialog = false"
@@ -361,6 +395,7 @@ onMounted(() => {
     from {
         transform: translateY(100%);
     }
+
     to {
         transform: translateY(0);
     }

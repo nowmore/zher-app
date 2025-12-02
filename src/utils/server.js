@@ -15,14 +15,6 @@ const connectToHistoryServer = async (server) => {
   });
 };
 
-const scanQRCode = async () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ success: true, message: '扫码成功' });
-    }, 1500);
-  });
-};
-
 const searchServers = async () => {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -38,7 +30,6 @@ const countOnlineServers = (servers) => {
 export {
   connectToServer,
   connectToHistoryServer,
-  scanQRCode,
   searchServers,
   countOnlineServers
 };

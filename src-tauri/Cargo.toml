@@ -23,7 +23,6 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.9.4", features = [] }
 tauri-plugin-log = "2"
-tauri-plugin-opener = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
 tauri-plugin-store = "2"
@@ -34,6 +33,7 @@ url = "2.5"
 mime_guess = "2.0"
 tauri-plugin-shell = "2"
 zher = { git = "https://github.com/nowmore/zher.git" }
+tauri-plugin-opener = "=2.3.0"
 
 
 

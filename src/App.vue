@@ -1,13 +1,17 @@
 <script setup>
 import MainScreen from './components/MainScreen.vue';
-import ThemeToggle from './components/ThemeToggle.vue';
+import { onMounted } from 'vue';
+import { initTheme } from './utils/theme';
+
+onMounted(async () => {
+  await initTheme();
+});
 </script>
 
 <template>
   <div
     class="relative min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 text-gray-800 dark:text-gray-100 transition-colors duration-300"
     style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
-    <ThemeToggle />
     <MainScreen />
   </div>
 </template>
