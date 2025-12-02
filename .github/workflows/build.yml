@@ -50,15 +50,10 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Build
-      shell: bash
-      run: |
-        npm run build
-
     - name: Build Android APK
       shell: bash
       run: |
-        npx tauri build --target ${{ matrix.target }} -- --target ${{ matrix.target }}
+        npm run tauri -- android build --target aarch64
 
     - name: Prepare Artifact
       shell: bash
