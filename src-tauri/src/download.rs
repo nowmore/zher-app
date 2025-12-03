@@ -438,34 +438,15 @@ pub async fn delete_all_downloads(
 
 #[tauri::command]
 pub async fn open_download_file(app: AppHandle, path: String) -> Result<(), String> {
-    let metadata = tokio::fs::metadata(&path).await;
-
     #[cfg(target_os = "android")]
     {
-        // Check if it's a directory
-        if let Ok(meta) = metadata {
-            if meta.is_dir() {
-                // Open folder with file manager
-                return open_folder_android(&app, &path).await;
-            }
-        } else {
-            return Err("File or folder not found".to_string());
-        }
-        return Ok(());
-        // Open file
         open_file_android(&app, &path).await
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
-            return Err("File not found".to_string());
-        }
-
         use tauri_plugin_opener::OpenerExt;
-        app.opener()
-            .open_url(&path, None::<&str>)
-            .map_err(|e| e.to_string())?;
+        app.opener().open_url(&path, None::<&str>).unwrap();
         Ok(())
     }
 }
@@ -518,110 +499,20 @@ pub async fn rename_download(
 
 #[tauri::command]
 pub async fn share_download(
-    #[allow(unused_variables)] app: AppHandle,
+    app: AppHandle,
     path: String,
 ) -> Result<(), String> {
-    if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
-        return Err("File not found".to_string());
-    }
-
-    #[cfg(target_os = "android")]
-    {
-        share_file_android(&app, &path).await
-    }
-
-    #[cfg(not(target_os = "android"))]
-    {
-        Err("Share not supported on this platform".to_string())
-    }
+    open_download_file(app, path).await
 }
-
-#[cfg(target_os = "android")]
-async fn open_folder_android(app: &AppHandle, path: &str) -> Result<(), String> {
-    use jni::objects::{JObject, JValue};
-    use jni::JavaVM;
-
-    let _path_owned = path.to_string();
-
-    app.run_on_main_thread(move || unsafe {
-        let vm = JavaVM::from_raw(ndk_context::android_context().vm().cast()).unwrap();
-        let mut env = vm.attach_current_thread().unwrap();
-
-        let activity = JObject::from_raw(ndk_context::android_context().context().cast());
-
-        // Use ACTION_GET_CONTENT to open file manager
-        let intent_class = env.find_class("android/content/Intent").unwrap();
-        let action_get_content = env
-            .get_static_field(&intent_class, "ACTION_GET_CONTENT", "Ljava/lang/String;")
-            .unwrap()
-            .l()
-            .unwrap();
-        let intent = env
-            .new_object(
-                &intent_class,
-                "(Ljava/lang/String;)V",
-                &[JValue::Object(&action_get_content)],
-            )
-            .unwrap();
-
-        // Set type to show all files
-        let mime_type = env.new_string("*/*").unwrap();
-        env.call_method(
-            &intent,
-            "setType",
-            "(Ljava/lang/String;)Landroid/content/Intent;",
-            &[JValue::Object(&mime_type)],
-        )
-        .unwrap();
-
-        // Add category to make it openable
-        let category_openable = env
-            .get_static_field(&intent_class, "CATEGORY_OPENABLE", "Ljava/lang/String;")
-            .unwrap()
-            .l()
-            .unwrap();
-        env.call_method(
-            &intent,
-            "addCategory",
-            "(Ljava/lang/String;)Landroid/content/Intent;",
-            &[JValue::Object(&category_openable)],
-        )
-        .unwrap();
-
-        let flag_activity_new_task = 0x10000000i32;
-        env.call_method(
-            &intent,
-            "addFlags",
-            "(I)Landroid/content/Intent;",
-            &[JValue::Int(flag_activity_new_task)],
-        )
-        .unwrap();
-
-        let chooser_title = env.new_string("Open file manager").unwrap();
-        let chooser = env
-            .call_static_method(
-                &intent_class,
-                "createChooser",
-                "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;",
-                &[JValue::Object(&intent), JValue::Object(&chooser_title)],
-            )
-            .unwrap()
-            .l()
-            .unwrap();
-
-        env.call_method(
-            &activity,
-            "startActivity",
-            "(Landroid/content/Intent;)V",
-            &[JValue::Object(&chooser)],
-        )
-        .unwrap();
-    })
-    .map_err(|e| format!("Failed to open file manager: {:?}", e))
-}
-
 #[cfg(target_os = "android")]
 async fn open_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
+    // Key points for opening files on Android:
+    // 1. Use Activity's ClassLoader to load AndroidX classes in Multidex environment
+    // 2. Convert file:// path to content:// URI using FileProvider for security (Android 7.0+)
+    // 3. Set proper MIME type based on file extension
+    // 4. Grant FLAG_GRANT_READ_URI_PERMISSION to allow target app to read the file
+    // 5. Use Intent.createChooser to let user select which app to open the file with
+    
     use jni::objects::{JObject, JValue};
     use jni::JavaVM;
 
@@ -634,6 +525,18 @@ async fn open_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
 
         let activity = JObject::from_raw(ndk_context::android_context().context().cast());
 
+        let activity_class = env.get_object_class(&activity).unwrap();
+        let class_loader = env
+            .call_method(
+                &activity_class,
+                "getClassLoader",
+                "()Ljava/lang/ClassLoader;",
+                &[],
+            )
+            .unwrap()
+            .l()
+            .unwrap();
+
         let file_path = env.new_string(&path_owned).unwrap();
         let file_class = env.find_class("java/io/File").unwrap();
         let file = env
@@ -644,12 +547,21 @@ async fn open_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
             )
             .unwrap();
 
-        let provider_class = env
-            .find_class("androidx/core/content/FileProvider")
+        let provider_class_name = env.new_string("androidx.core.content.FileProvider").unwrap();
+        let provider_class_obj = env
+            .call_method(
+                &class_loader,
+                "loadClass",
+                "(Ljava/lang/String;)Ljava/lang/Class;",
+                &[JValue::Object(&provider_class_name)],
+            )
+            .unwrap()
+            .l()
             .unwrap();
-        let authority = env
-            .new_string(format!("{}.fileprovider", app_identifier))
-            .unwrap();
+
+        let provider_class: jni::objects::JClass = provider_class_obj.into();
+
+        let authority = env.new_string(format!("{}.fileprovider", app_identifier)).unwrap();
 
         let uri = env
             .call_static_method(
@@ -666,7 +578,6 @@ async fn open_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
             .l()
             .unwrap();
 
-        // Get MIME type
         let extension = std::path::Path::new(&path_owned)
             .extension()
             .and_then(|e| e.to_str())
@@ -682,7 +593,7 @@ async fn open_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
             "txt" => "text/plain",
             "zip" => "application/zip",
             "apk" => "application/vnd.android.package-archive",
-            _ => "application/octet-stream",
+            _ => "*/*",
         };
 
         let mime_str = env.new_string(mime_type).unwrap();
@@ -739,17 +650,14 @@ async fn open_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
         )
         .unwrap();
     })
-    .map_err(|e| format!("Failed to open file: {:?}", e))
-}
-
-#[cfg(target_os = "android")]
-async fn share_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
+    .unwrap();
+    
     Ok(())
 }
 
 #[tauri::command]
 pub async fn open_with_download(app: AppHandle, path: String) -> Result<(), String> {
-    share_download(app, path).await
+    open_download_file(app, path).await
 }
 
 async fn save_downloads(app: &AppHandle, records: &[DownloadRecord]) {
