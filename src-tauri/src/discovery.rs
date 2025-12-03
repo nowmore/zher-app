@@ -12,25 +12,23 @@ pub struct ServiceInfo {
 #[tauri::command]
 pub async fn discover_services() -> Result<Vec<ServiceInfo>, String> {
     let mut services = Vec::new();
-    
+
     let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
-    socket
-        .set_broadcast(true)
-        .map_err(|e| e.to_string())?;
+    socket.set_broadcast(true).map_err(|e| e.to_string())?;
     socket
         .set_read_timeout(Some(Duration::from_secs(2)))
         .map_err(|e| e.to_string())?;
 
     let broadcast_msg = b"ZHER_DISCOVERY";
     let broadcast_addr: SocketAddr = "255.255.255.255:4837".parse().unwrap();
-    
+
     socket
         .send_to(broadcast_msg, broadcast_addr)
         .map_err(|e| e.to_string())?;
 
     let mut buf = [0u8; 1024];
     let start = std::time::Instant::now();
-    
+
     while start.elapsed() < Duration::from_secs(2) {
         match socket.recv_from(&mut buf) {
             Ok((size, addr)) => {
@@ -54,7 +52,7 @@ pub async fn discover_services() -> Result<Vec<ServiceInfo>, String> {
 
     services.sort_by(|a, b| a.ip.cmp(&b.ip));
     services.dedup_by(|a, b| a.ip == b.ip);
-    
+
     Ok(services)
 }
 

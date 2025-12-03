@@ -1,7 +1,7 @@
 import { reactive } from 'vue';
 import { io } from 'socket.io-client';
-import { getSetting, saveSetting } from '../utils/appStore';
-
+import { settings } from '../utils/settings';
+import { autoAction } from '../utils/action';
 class ServerConnection {
   constructor(serverKey) {
     this.serverKey = serverKey;
@@ -16,7 +16,7 @@ class ServerConnection {
     this.reconnectDelay = 2000;
     this.reconnectTimer = null;
     this.pingTimer = null;
-    this.messages = []; // 缓存消息
+    this.messages = []; 
     this.callbacks = {
       onMessage: [],
       onWelcome: [],
@@ -32,23 +32,21 @@ class ServerConnection {
   }
 
   async saveMessages() {
-    try {
-      await saveSetting(`zher_messages_${this.serverKey}`, JSON.stringify(this.messages));
-    } catch (e) {
-      console.error('Failed to save messages:', e);
-    }
+    const key = `zher_messages_${this.serverKey}`;
+    settings.cache[key] = this.messages;
   }
 
   async loadMessages() {
-    try {
-      const stored = await getSetting(`zher_messages_${this.serverKey}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
-        this.messages = parsed.filter(m => m.id > tenMinutesAgo);
+    const key = `zher_messages_${this.serverKey}`;
+
+    const stored = settings.cache[key] || [];
+    if (stored.length > 0) {
+      const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+      this.messages = stored.filter(m => m.id > tenMinutesAgo);
+
+      if (this.messages.length !== stored.length) {
+        settings.cache[key] = this.messages;
       }
-    } catch (e) {
-      console.error('Failed to load messages:', e);
     }
   }
 
@@ -113,11 +111,11 @@ const getServerKey = (url) => {
   }
 };
 
-const getSessionId = async () => {
-  let id = await getSetting('zher_uid');
-  if (!id) {
+const getSessionId = () => {
+  let id = settings.cache.zher_uid
+  if (!id || id === '') {
     id = Math.random().toString(36).substring(2) + Date.now().toString(36);
-    await saveSetting('zher_uid', id);
+    settings.cache.zher_uid = id;
   }
   return id;
 };
@@ -171,8 +169,9 @@ const setupSocketListeners = (conn, url) => {
     }
   });
 
-  conn.socket.on('message', (msg) => {
+  conn.socket.on('message', async (msg) => {
     conn.addMessage(msg);
+    await autoAction(msg, conn.serverUrl);
     conn.callbacks.onMessage.forEach(cb => cb(msg));
   });
 

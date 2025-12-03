@@ -19,13 +19,33 @@
                         </div>
                         <span class="text-base font-medium text-gray-900 dark:text-white">深色模式</span>
                     </div>
-                    <button @click="handleToggleTheme"
-                        class="relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none"
-                        :class="isDarkMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'">
-                        <span
-                            class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform"
-                            :class="isDarkMode ? 'translate-x-6' : 'translate-x-1'" />
-                    </button>
+                    <Switch v-model="darkMode" />
+                </div>
+                <div class="flex items-center justify-between py-4 border-b border-gray-100 dark:border-gray-800">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                        </div>
+                        <span class="text-base font-medium text-gray-900 dark:text-white">复制文本到剪贴板</span>
+                    </div>
+                    <Switch v-model="autoCopyText" />
+                </div>
+                <div class="flex items-center justify-between py-4 border-b border-gray-100 dark:border-gray-800">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                        </div>
+                        <span class="text-base font-medium text-gray-900 dark:text-white">自动下载</span>
+                    </div>
+                    <Switch v-model="autoDownload" />
                 </div>
                 <div class="flex items-center justify-between py-4 border-b border-gray-100 dark:border-gray-800">
                     <div class="flex items-center gap-3">
@@ -77,18 +97,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { initTheme, toggleTheme } from '../utils/theme';
+import Switch from './Switch.vue';
 import { debugState, clearLogs } from '../utils/debugConsole';
-
-const isDarkMode = ref(false);
-
-onMounted(async () => {
-    isDarkMode.value = await initTheme();
-});
-
-const handleToggleTheme = async () => {
-    isDarkMode.value = await toggleTheme();
-};
-
+import { darkMode, autoCopyText, autoDownload } from '../utils/settings';
 </script>

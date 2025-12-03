@@ -56,14 +56,70 @@
                             <span class="text-[10px] text-gray-400">{{ formattedSize }}</span>
                         </div>
                     </div>
-                    <button @click="$emit('download', msg.fileId, msg.fileName)"
-                        class="w-9 h-9 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center text-white shadow-sm shrink-0 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                        </svg>
-                    </button>
+                    <!-- Download Button with Progress -->
+                    <div class="relative shrink-0">
+                        <!-- Completed State -->
+                        <button v-if="isCompleted"
+                            class="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M5 13l4 4L19 7" />
+                            </svg>
+                        </button>
+
+                        <!-- Downloading State -->
+                        <button v-else-if="isDownloading" @click="handlePause"
+                            class="w-9 h-9 rounded-full bg-orange-500 hover:bg-orange-600 flex items-center justify-center text-white shadow-sm transition-colors relative overflow-hidden">
+                            <!-- Progress Ring -->
+                            <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.2)"
+                                    stroke-width="2" />
+                                <circle cx="18" cy="18" r="16" fill="none" stroke="white" stroke-width="2"
+                                    stroke-dasharray="100" :stroke-dashoffset="100 - (downloadStatus?.progress || 0)"
+                                    stroke-linecap="round" class="transition-all duration-300" />
+                            </svg>
+                            <!-- Pause Icon -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 relative z-10" fill="currentColor"
+                                viewBox="0 0 24 24">
+                                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                            </svg>
+                        </button>
+
+                        <!-- Paused State -->
+                        <button v-else-if="isPaused" @click="handleResume"
+                            class="w-9 h-9 rounded-full bg-yellow-500 hover:bg-yellow-600 flex items-center justify-center text-white shadow-sm transition-colors relative overflow-hidden">
+                            <!-- Progress Ring -->
+                            <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.2)"
+                                    stroke-width="2" />
+                                <circle cx="18" cy="18" r="16" fill="none" stroke="white" stroke-width="2"
+                                    stroke-dasharray="100" :stroke-dashoffset="100 - (downloadStatus?.progress || 0)"
+                                    stroke-linecap="round" />
+                            </svg>
+                            <!-- Play Icon -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 relative z-10" fill="currentColor"
+                                viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                        </button>
+
+                        <!-- Default Download State -->
+                        <button v-else @click="handleDownload"
+                            class="w-9 h-9 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center text-white shadow-sm transition-colors active:scale-95">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                            </svg>
+                        </button>
+
+                        <!-- Progress Text -->
+                        <div v-if="isDownloading || isPaused"
+                            class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                            {{ downloadStatus?.progress || 0 }}%
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -73,7 +129,8 @@
 <script setup>
 import { computed } from 'vue';
 import { parseMessage } from '../../utils/textUtils';
-
+import { activeDownloads, pauseDownload, resumeDownload } from '../../utils/downloadManager';
+import { formatFileSize } from '../../utils/fileTypes';
 const props = defineProps({
     msg: {
         type: Object,
@@ -89,18 +146,33 @@ const props = defineProps({
     },
 });
 
-defineEmits(['copy', 'download']);
+const emit = defineEmits(['copy', 'download']);
 
 const isSelf = computed(() => props.msg.senderId === props.currentUser.id);
 const isCopied = computed(() => props.copiedMessageId === props.msg.id);
 const parsedMessage = computed(() => parseMessage(props.msg.text));
 
 const formattedSize = computed(() => {
-    const bytes = props.msg.fileSize;
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return formatFileSize(props.msg.fileSize);
 });
+
+const downloadStatus = computed(() => {
+    return activeDownloads.value.get(props.msg.fileId);
+});
+
+const isDownloading = computed(() => downloadStatus.value?.status === 'downloading');
+const isPaused = computed(() => downloadStatus.value?.status === 'paused');
+const isCompleted = computed(() => downloadStatus.value?.status === 'completed');
+
+const handleDownload = () => {
+    emit('download', props.msg.fileId, props.msg.fileName);
+};
+
+const handlePause = () => {
+    pauseDownload(props.msg.fileId);
+};
+
+const handleResume = () => {
+    resumeDownload(props.msg.fileId);
+};
 </script>

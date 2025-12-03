@@ -1,8 +1,8 @@
 <template>
   <div
     class="fixed inset-0 z-50 flex flex-col font-sans overflow-hidden text-gray-800 dark:text-gray-100 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-gray-800"
-    :style="{ 
-      paddingTop: 'env(safe-area-inset-top, 0px)', 
+    :style="{
+      paddingTop: 'env(safe-area-inset-top, 0px)',
       paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       height: viewportHeight + 'px'
     }">
@@ -11,8 +11,8 @@
     <FileProgress :is-zipping="isZipping" :current-zip-name="currentZipName" :zip-progress="zipProgress" />
 
     <!-- Mobile Users List Modal -->
-    <UserList :show="showMobileUsers" :users="users" :current-user="currentUser" :server-url="serverUrl" v-model:is-editing-name="isEditingName"
-      @close="showMobileUsers = false" @change-name="handleChangeName" />
+    <UserList :show="showMobileUsers" :users="users" :current-user="currentUser" :server-url="serverUrl"
+      v-model:is-editing-name="isEditingName" @close="showMobileUsers = false" @change-name="handleChangeName" />
 
     <!-- Main Content -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -26,14 +26,24 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 class="text-lg font-bold text-gray-800 dark:text-white">这儿 <span
-              class="text-sm font-normal text-gray-400 ml-2">zhe'r</span></h1>
+          <h1 class="text-lg font-bold text-gray-800 dark:text-white">{{ hostname }}
+          </h1>
         </div>
-        <button @click="showMobileUsers = true"
-          class="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          在线: {{ onlineCount }}
-        </button>
+        <div class="flex items-center gap-2">
+          <button @click="goToDownloads"
+            class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 14l-7 7m0 0l-7-7m7 7V3m-7 18h14" />
+            </svg>
+          </button>
+          <button @click="showMobileUsers = true"
+            class="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            在线: {{ onlineCount }}
+          </button>
+        </div>
       </header>
 
       <!-- Chat Container -->
@@ -51,12 +61,12 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+
 import { useGlobalSocket } from '../composables/useGlobalSocket';
 import { useChat } from '../composables/useChat';
 import { useFileTransfer } from '../composables/useFileTransfer';
-import { copyText as copyToClipboard } from '../utils/textUtils';
-
+import { initDownloadManager, startDownload } from '../utils/downloadManager';
+import { copyText } from '../utils/action';
 // Components
 import FileProgress from './browser/FileProgress.vue';
 import UserList from './browser/UserList.vue';
@@ -70,7 +80,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'navigate-to-downloads']);
 
 const chatContainer = ref(null);
 const inputText = ref('');
@@ -93,7 +103,7 @@ const users = computed(() => connection.value?.users || []);
 const currentUser = computed(() => connection.value?.currentUser || {});
 const serverUrl = computed(() => connection.value?.serverUrl || '');
 
-const { messages, loadMoreMessages, addMessage, loadChatHistory } = useChat();
+const { messages, loadMoreMessages, addMessage } = useChat();
 
 const realSendMessage = () => {
   if (selectedFile.value) {
@@ -118,15 +128,13 @@ const realSendMessage = () => {
   scrollToBottom();
 };
 
-const sendMessage = realSendMessage;
-
 const {
   selectedFile, isZipping, zipProgress, currentZipName, currentZipFile,
   handleFileChange, handleStartUpload, addSharedFile
-} = useFileTransfer(sendMessage);
+} = useFileTransfer(realSendMessage);
 
 const handleSendMessage = () => {
-  sendMessage();
+  realSendMessage();
 };
 
 const handleFileSelect = (e) => {
@@ -136,24 +144,9 @@ const handleFileSelect = (e) => {
 const handleChangeName = (newName) => {
   socketRequestNameChange(props.url, newName);
 };
-
-const handleDownload = async (fileId, fileName) => {
-  try {
-    const baseUrl = props.url.endsWith('/') ? props.url.slice(0, -1) : props.url;
-    const url = `${baseUrl}/api/download/${fileId}`;
-    await invoke('download_file', { url, filename: fileName });
-  } catch (err) { }
-};
-
-const handleCopy = (text, msgId) => {
-  copyToClipboard(text, () => {
-    copiedMessageId.value = msgId;
-    setTimeout(() => {
-      if (copiedMessageId.value === msgId) {
-        copiedMessageId.value = null;
-      }
-    }, 2000);
-  }, () => { });
+const goToDownloads = () => {
+  emit('close');
+  emit('navigate-to-downloads');
 };
 
 const scrollToBottom = () => {
@@ -174,7 +167,19 @@ const handleScroll = (e) => {
 
 const handleAndroidBack = () => {
   emit('close');
-  return false; // 返回 false 表示已处理，不执行默认行为
+  return false;
+};
+
+const handleCopy = async (text, messageId) => {
+  await copyText(text);
+  copiedMessageId.value = messageId;
+  setTimeout(() => {
+    copiedMessageId.value = null;
+  }, 2000);
+};
+
+const handleDownload = async (fileId, fileName) => {
+  await startDownload(fileId, fileName, props.url);
 };
 
 const onMessageCallback = (msg) => {
@@ -201,8 +206,22 @@ const handleViewportResize = () => {
   });
 };
 
+const getHostname = () => {
+  try {
+    const urlStr = props.url.startsWith('http')
+      ? props.url
+      : `https://${props.url}`;
+    return new URL(urlStr).hostname;
+  } catch (e) {
+    return 'Invalid URL';
+  }
+};
+
+const hostname = getHostname();
+
 onMounted(async () => {
   window.handleAndroidBack = handleAndroidBack;
+  await initDownloadManager();
 
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', handleViewportResize);
@@ -215,12 +234,13 @@ onMounted(async () => {
 
   if (!connection.value || !connection.value.isConnected) {
     connection.value = await connect(props.url, true);
-  } else {
-    if (connection.value.messages && connection.value.messages.length > 0) {
-      connection.value.messages.forEach(msg => {
-        addMessage(msg);
-      });
-    }
+  }
+
+  // 只在首次加载时从 connection 加载历史消息
+  if (connection.value.messages && connection.value.messages.length > 0 && messages.value.length === 0) {
+    connection.value.messages.forEach(msg => {
+      addMessage(msg);
+    });
   }
 
   registerCallback(props.url, 'onMessage', onMessageCallback);

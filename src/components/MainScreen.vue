@@ -1,7 +1,7 @@
 <template>
   <div class="flex-col min-h-full flex">
     <BrowserView v-show="currentBrowserUrl && activePage === 'zher'" v-if="currentBrowserUrl && activePage === 'zher'"
-      :url="currentBrowserUrl" @close="closeBrowser" />
+      :url="currentBrowserUrl" @close="closeBrowser" @navigate-to-downloads="navigateToDownloads" />
 
     <main v-show="!currentBrowserUrl || activePage !== 'zher'" class="flex-1 flex flex-col overflow-y-auto"
       :style="{ paddingBottom: isKeyboardVisible ? '0' : '6rem' }">
@@ -191,6 +191,10 @@ const handleOpenBrowser = (url) => {
 
 const closeBrowser = () => {
   currentBrowserUrl.value = '';
+};
+
+const navigateToDownloads = () => {
+  activePage.value = 'download';
 };
 
 onMounted(async () => {

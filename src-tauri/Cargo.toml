@@ -34,6 +34,7 @@ mime_guess = "2.0"
 tauri-plugin-shell = "2"
 zher = { git = "https://github.com/nowmore/zher.git" }
 tauri-plugin-opener = "=2.3.0"
+tauri-plugin-clipboard-manager = "2"
 
 
 

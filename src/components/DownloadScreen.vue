@@ -1,8 +1,8 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCategoryByExtension, getAvailableCategories, groupByDate, formatFileSize, FILE_CATEGORIES } from '../utils/fileTypes';
-import { activeDownloads, formatSize, pauseDownload, resumeDownload, cancelDownload } from '../utils/downloadManager';
+import { activeDownloads, pauseDownload, resumeDownload, cancelDownload } from '../utils/downloadManager';
 
 const downloads = ref([]);
 const selectedCategory = ref('ALL');
@@ -151,8 +151,21 @@ const getCategoryIcon = (category) => {
     return icons[category] || 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z';
 };
 
-onMounted(() => {
+let unlistenCompleted = null;
+
+onMounted(async () => {
     loadDownloads();
+    
+    const { listen } = await import('@tauri-apps/api/event');
+    unlistenCompleted = await listen('download-completed', () => {
+        loadDownloads();
+    });
+});
+
+onUnmounted(() => {
+    if (unlistenCompleted) {
+        unlistenCompleted();
+    }
 });
 </script>
 
@@ -261,7 +274,7 @@ onMounted(() => {
                     </div>
                     <div class="flex items-center justify-between text-xs">
                         <span class="text-gray-500 dark:text-gray-400">
-                            {{ formatSize(download.received) }} / {{ formatSize(download.size) }}
+                            {{ formatFileSize(download.received) }} / {{ formatFileSize(download.size) }}
                         </span>
                         <span v-if="download.status === 'paused'"
                             class="text-yellow-600 dark:text-yellow-400">已暂停</span>

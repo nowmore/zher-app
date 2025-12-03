@@ -48,13 +48,21 @@ impl Clone for DownloadState {
     }
 }
 
-fn get_unique_filename(dir: &PathBuf, filename: &str) -> String {
-    let path = dir.join(filename);
+fn get_unique_filename(dir: &PathBuf, filename: &str, existing_records: &[DownloadRecord]) -> String {
+    // 检查文件名是否在缓存或文件系统中已存在
+    let is_name_taken = |name: &str| -> bool {
+        // 检查缓存中是否存在
+        let in_cache = existing_records.iter().any(|r| r.filename == name);
+        // 检查文件系统中是否存在
+        let in_filesystem = dir.join(name).exists();
+        in_cache || in_filesystem
+    };
 
-    if !path.exists() {
+    if !is_name_taken(filename) {
         return filename.to_string();
     }
 
+    let path = PathBuf::from(filename);
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
@@ -66,8 +74,7 @@ fn get_unique_filename(dir: &PathBuf, filename: &str) -> String {
             format!("{}({}).{}", stem, counter, ext)
         };
 
-        let new_path = dir.join(&new_name);
-        if !new_path.exists() {
+        if !is_name_taken(&new_name) {
             return new_name;
         }
         counter += 1;
@@ -94,7 +101,13 @@ pub async fn download_file(
         .await
         .map_err(|e| format!("Failed to create download dir: {}", e))?;
 
-    let unique_filename = get_unique_filename(&download_path, &filename);
+    // 获取现有的下载记录用于检查文件名冲突
+    let existing_records = {
+        let records = download_state.records.lock().await;
+        records.clone()
+    };
+
+    let unique_filename = get_unique_filename(&download_path, &filename, &existing_records);
     let file_path = download_path.join(&unique_filename);
     let temp_path = download_path.join(format!("{}.part", unique_filename));
 
@@ -260,13 +273,17 @@ async fn download_task(
     let mut stream = response.bytes_stream();
     let mut received = existing_size;
     let mut paused = false;
+    let mut last_progress_update = std::time::Instant::now();
 
     loop {
         tokio::select! {
+            biased;
+            
             control = control_rx.recv() => {
                 match control {
                     Some(DownloadControl::Pause) => {
                         paused = true;
+                        file.flush().await.map_err(|e| e.to_string())?;
                         app.emit("download-paused", serde_json::json!({ "id": task_id })).unwrap_or(());
                     }
                     Some(DownloadControl::Resume) => {
@@ -285,15 +302,19 @@ async fn download_task(
                         file.write_all(&chunk).await.map_err(|e| e.to_string())?;
                         received += chunk.len() as u64;
 
-                        app.emit(
-                            "download-progress",
-                            DownloadProgress {
-                                id: task_id,
-                                received,
-                                total: total_size,
-                            },
-                        )
-                        .unwrap_or(());
+                        // Update progress every 100ms to reduce overhead
+                        if last_progress_update.elapsed().as_millis() >= 100 {
+                            app.emit(
+                                "download-progress",
+                                DownloadProgress {
+                                    id: task_id,
+                                    received,
+                                    total: total_size,
+                                },
+                            )
+                            .unwrap_or(());
+                            last_progress_update = std::time::Instant::now();
+                        }
                     }
                     Some(Err(e)) => {
                         file.flush().await.map_err(|e| e.to_string())?;
@@ -417,9 +438,8 @@ pub async fn delete_all_downloads(
 
 #[tauri::command]
 pub async fn open_download_file(app: AppHandle, path: String) -> Result<(), String> {
-
     let metadata = tokio::fs::metadata(&path).await;
-    
+
     #[cfg(target_os = "android")]
     {
         // Check if it's a directory
@@ -441,7 +461,7 @@ pub async fn open_download_file(app: AppHandle, path: String) -> Result<(), Stri
         if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
             return Err("File not found".to_string());
         }
-        
+
         use tauri_plugin_opener::OpenerExt;
         app.opener()
             .open_url(&path, None::<&str>)
@@ -651,7 +671,7 @@ async fn open_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("");
-        
+
         let mime_type = match extension.to_lowercase().as_str() {
             "pdf" => "application/pdf",
             "jpg" | "jpeg" => "image/jpeg",
@@ -664,7 +684,7 @@ async fn open_file_android(app: &AppHandle, path: &str) -> Result<(), String> {
             "apk" => "application/vnd.android.package-archive",
             _ => "application/octet-stream",
         };
-        
+
         let mime_str = env.new_string(mime_type).unwrap();
 
         let intent_class = env.find_class("android/content/Intent").unwrap();
