@@ -1,6 +1,7 @@
 mod discovery;
 mod download;
 mod server;
+mod shared_files;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -22,6 +23,10 @@ pub fn run() {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
                         .level(log::LevelFilter::Info)
+                        .targets([
+                            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+                        ])
                         .build(),
                 )?;
             }
@@ -64,7 +69,9 @@ pub fn run() {
             discovery::get_local_ip,
             server::start_server,
             server::stop_server,
-            server::get_server_status
+            server::get_server_status,
+            shared_files::read_shared_file,
+            shared_files::cleanup_shared_files
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

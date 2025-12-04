@@ -14,6 +14,50 @@
     <UserList :show="showMobileUsers" :users="users" :current-user="currentUser" :server-url="serverUrl"
       v-model:is-editing-name="isEditingName" @close="showMobileUsers = false" @change-name="handleChangeName" />
 
+    <!-- Room Code Modal -->
+    <div v-if="showRoomCodeModal"
+      class="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-fade-in">
+        <div class="p-6 border-b border-gray-100 dark:border-gray-700">
+          <h3 class="font-bold text-gray-800 dark:text-white text-lg">🔒 需要房间码</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">此服务器需要房间码才能连接</p>
+        </div>
+        
+        <div class="p-6 space-y-4">
+          <div class="space-y-2">
+            <label class="text-sm text-gray-600 dark:text-gray-400">请输入6位数字房间码</label>
+            <div class="flex gap-2">
+              <input 
+                v-for="(digit, index) in roomCodeDigits" 
+                :key="index"
+                :ref="el => setRoomCodeInputRef(el, index)"
+                v-model="roomCodeDigits[index]"
+                type="text"
+                maxlength="1"
+                @input="handleRoomCodeDigitInput(index, $event)"
+                @keydown="handleRoomCodeKeyDown(index, $event)"
+                @paste="handleRoomCodePaste($event)"
+                class="w-12 h-12 text-center text-lg border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                :class="roomCodeError ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'" />
+            </div>
+            <p v-if="roomCodeError" class="text-sm text-red-500">{{ roomCodeError }}</p>
+          </div>
+          
+          <div class="flex gap-2">
+            <button @click="handleRoomCodeCancel"
+              class="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+              取消
+            </button>
+            <button @click="handleRoomCodeSubmit"
+              :disabled="roomCodeDigits.join('').length !== 6"
+              class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              连接
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Main Content -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
       <!-- Header -->
@@ -60,11 +104,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 
 import { useGlobalSocket } from '../composables/useGlobalSocket';
 import { useChat } from '../composables/useChat';
 import { useFileTransfer } from '../composables/useFileTransfer';
+import { useSharedFiles } from '../composables/useSharedFiles';
 import { initDownloadManager, startDownload } from '../utils/downloadManager';
 import { copyText } from '../utils/action';
 // Components
@@ -77,6 +122,10 @@ const props = defineProps({
   url: {
     type: String,
     required: true
+  },
+  roomCode: {
+    type: String,
+    default: null
   }
 });
 
@@ -89,6 +138,16 @@ const showMobileUsers = ref(false);
 const isEditingName = ref(false);
 const connection = ref(null);
 const viewportHeight = ref(window.innerHeight);
+
+// Room code modal
+const showRoomCodeModal = ref(false);
+const roomCodeDigits = ref(['', '', '', '', '', '']);
+const roomCodeInputRefs = ref([]);
+const roomCodeError = ref('');
+const pendingRoomCodeReconnect = ref(false);
+
+// Shared files handling
+const { hasPendingFiles, getPendingFiles, clearPendingFiles } = useSharedFiles();
 
 const {
   connect,
@@ -144,9 +203,115 @@ const handleFileSelect = (e) => {
 const handleChangeName = (newName) => {
   socketRequestNameChange(props.url, newName);
 };
+
 const goToDownloads = () => {
   emit('close');
   emit('navigate-to-downloads');
+};
+
+// Room code input handlers
+const setRoomCodeInputRef = (el, index) => {
+  if (el) {
+    roomCodeInputRefs.value[index] = el;
+  }
+};
+
+const handleRoomCodeDigitInput = (index, event) => {
+  const value = event.target.value;
+  
+  if (!/^\d*$/.test(value)) {
+    event.target.value = roomCodeDigits.value[index];
+    return;
+  }
+  
+  roomCodeDigits.value[index] = value;
+  roomCodeError.value = '';
+  
+  if (value && index < 5) {
+    nextTick(() => {
+      if (roomCodeInputRefs.value[index + 1]) {
+        roomCodeInputRefs.value[index + 1].focus();
+      }
+    });
+  }
+};
+
+const handleRoomCodeKeyDown = (index, event) => {
+  if (event.key === 'Backspace' && !roomCodeDigits.value[index] && index > 0) {
+    nextTick(() => {
+      if (roomCodeInputRefs.value[index - 1]) {
+        roomCodeInputRefs.value[index - 1].focus();
+      }
+    });
+  }
+  
+  if (event.key === 'ArrowLeft' && index > 0) {
+    event.preventDefault();
+    roomCodeInputRefs.value[index - 1].focus();
+  }
+  if (event.key === 'ArrowRight' && index < 5) {
+    event.preventDefault();
+    roomCodeInputRefs.value[index + 1].focus();
+  }
+  
+  if (event.key === 'Enter' && roomCodeDigits.value.join('').length === 6) {
+    handleRoomCodeSubmit();
+  }
+};
+
+const handleRoomCodePaste = (event) => {
+  event.preventDefault();
+  const text = event.clipboardData.getData('text');
+  const digits = text.replace(/\D/g, '').slice(0, 6).split('');
+  
+  for (let i = 0; i < 6; i++) {
+    roomCodeDigits.value[i] = digits[i] || '';
+  }
+  
+  const lastFilledIndex = digits.length - 1;
+  const nextIndex = Math.min(lastFilledIndex + 1, 5);
+  nextTick(() => {
+    if (roomCodeInputRefs.value[nextIndex]) {
+      roomCodeInputRefs.value[nextIndex].focus();
+    }
+  });
+};
+
+const handleRoomCodeSubmit = async () => {
+  const code = roomCodeDigits.value.join('');
+  if (code.length !== 6) {
+    roomCodeError.value = '请输入完整的6位房间码';
+    return;
+  }
+  
+  showRoomCodeModal.value = false;
+  pendingRoomCodeReconnect.value = false;
+  
+  // Reconnect with room code
+  try {
+    connection.value = await connect(props.url, true, code);
+    
+    // Save room code to cache only if connection succeeds
+    try {
+      const urlObj = new URL(props.url);
+      const serverKey = `${urlObj.hostname}:${urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80')}`;
+      const cacheKey = `zher_room_code_${serverKey}`;
+      settings.cache[cacheKey] = code;
+    } catch (e) {
+      console.error('Failed to save room code:', e);
+    }
+  } catch (error) {
+    roomCodeError.value = '连接失败，请检查房间码是否正确';
+    showRoomCodeModal.value = true;
+  }
+};
+
+const handleRoomCodeCancel = () => {
+  showRoomCodeModal.value = false;
+  pendingRoomCodeReconnect.value = false;
+  roomCodeDigits.value = ['', '', '', '', '', ''];
+  roomCodeError.value = '';
+  emit('close');
 };
 
 const scrollToBottom = () => {
@@ -219,6 +384,61 @@ const getHostname = () => {
 
 const hostname = getHostname();
 
+const loadSharedFilesAsFileObjects = async () => {
+  const sharedFiles = getPendingFiles();
+  if (sharedFiles.length === 0) return;
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    
+    const fileObjects = await Promise.all(
+      sharedFiles.map(async (fileInfo) => {
+        try {
+          const fileData = await invoke('read_shared_file', { path: fileInfo.path });
+          const blob = new Blob([new Uint8Array(fileData)], { type: fileInfo.type });
+          return new File([blob], fileInfo.name, { type: fileInfo.type });
+        } catch (error) {
+          console.error(`Failed to read file ${fileInfo.name}:`, error);
+          return null;
+        }
+      })
+    );
+
+    const validFiles = fileObjects.filter(f => f !== null);
+    
+    if (validFiles.length === 0) {
+      clearPendingFiles();
+      return;
+    }
+
+    if (validFiles.length === 1) {
+      selectedFile.value = validFiles[0];
+    } else {
+      // Multiple files - will be zipped by handleFileChange
+      const dataTransfer = new DataTransfer();
+      validFiles.forEach(file => dataTransfer.items.add(file));
+      const fakeEvent = { target: { files: dataTransfer.files, value: '' } };
+      await handleFileChange(fakeEvent);
+      clearPendingFiles();
+      return; // handleFileChange will trigger send
+    }
+
+    clearPendingFiles();
+    
+    // Auto send after a short delay to ensure UI is ready
+    nextTick(() => {
+      setTimeout(() => {
+        if (selectedFile.value) {
+          handleSendMessage();
+        }
+      }, 500);
+    });
+  } catch (error) {
+    console.error('Failed to load shared files:', error);
+    clearPendingFiles();
+  }
+};
+
 onMounted(async () => {
   window.handleAndroidBack = handleAndroidBack;
   await initDownloadManager();
@@ -233,7 +453,54 @@ onMounted(async () => {
   connection.value = getConnection(props.url);
 
   if (!connection.value || !connection.value.isConnected) {
-    connection.value = await connect(props.url, true);
+    // Determine room code with correct priority:
+    // 1. URL parameter (highest priority - user explicitly provided)
+    // 2. Props (passed from parent component)
+    // 3. Cache (lowest priority - previously used code)
+    let roomCode = null;
+    let serverKey = '';
+    let cacheKey = '';
+    
+    try {
+      const urlObj = new URL(props.url);
+      serverKey = `${urlObj.hostname}:${urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80')}`;
+      cacheKey = `zher_room_code_${serverKey}`;
+      
+      // Priority 1: URL parameter
+      roomCode = urlObj.searchParams.get('code');
+      
+      // Priority 2: Props
+      if (!roomCode && props.roomCode) {
+        roomCode = props.roomCode;
+      }
+      
+      // Priority 3: Cache
+      if (!roomCode) {
+        roomCode = settings.cache[cacheKey];
+      }
+    } catch (e) {
+      // Invalid URL, ignore
+    }
+    
+    try {
+      connection.value = await connect(props.url, true, roomCode);
+    } catch (error) {
+      // If connection fails due to room code issue
+      if (error && error.message && (error.message.includes('room code') || error.message.includes('Room code'))) {
+        // Clear invalid cached room code
+        if (cacheKey && settings.cache[cacheKey]) {
+          delete settings.cache[cacheKey];
+        }
+        
+        // Show room code input modal
+        showRoomCodeModal.value = true;
+        nextTick(() => {
+          if (roomCodeInputRefs.value[0]) {
+            roomCodeInputRefs.value[0].focus();
+          }
+        });
+      }
+    }
   }
 
   // 只在首次加载时从 connection 加载历史消息
@@ -248,6 +515,11 @@ onMounted(async () => {
   registerCallback(props.url, 'onStartUpload', onStartUploadCallback);
 
   scrollToBottom();
+  
+  // Handle shared files if any
+  if (hasPendingFiles.value) {
+    await loadSharedFilesAsFileObjects();
+  }
 });
 
 onUnmounted(() => {

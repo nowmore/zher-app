@@ -21,19 +21,19 @@ struct NetworkInterface {
 
 fn is_hotspot_interface(name: &str) -> bool {
     let name_lower = name.to_lowercase();
-    name_lower.contains("ap") ||
-    name_lower == "wlan1" ||
-    name_lower.contains("softap") ||
-    name_lower.contains("swlan") ||
-    name_lower == "ap0"
+    name_lower.contains("ap")
+        || name_lower == "wlan1"
+        || name_lower.contains("softap")
+        || name_lower.contains("swlan")
+        || name_lower == "ap0"
 }
 
 fn is_wlan_interface(name: &str) -> bool {
     let name_lower = name.to_lowercase();
-    name_lower.starts_with("wlan") ||
-    name_lower.starts_with("wi-fi") ||
-    name_lower.starts_with("wifi") ||
-    name_lower.contains("wireless")
+    name_lower.starts_with("wlan")
+        || name_lower.starts_with("wi-fi")
+        || name_lower.starts_with("wifi")
+        || name_lower.contains("wireless")
 }
 
 fn calculate_broadcast_address(ip: Ipv4Addr) -> Ipv4Addr {
@@ -56,7 +56,7 @@ fn get_network_interfaces() -> Vec<NetworkInterface> {
 
                 if is_wlan || is_hotspot {
                     let broadcast = calculate_broadcast_address(ipv4);
-                    
+
                     interfaces.push(NetworkInterface {
                         name: name.clone(),
                         ip: ipv4,
@@ -73,15 +73,12 @@ fn get_network_interfaces() -> Vec<NetworkInterface> {
 
 fn get_broadcast_addresses() -> Vec<Ipv4Addr> {
     let interfaces = get_network_interfaces();
-    
+
     if interfaces.is_empty() {
         return vec![];
     }
 
-    let mut broadcasts: Vec<Ipv4Addr> = interfaces
-        .iter()
-        .map(|iface| iface.broadcast)
-        .collect();
+    let mut broadcasts: Vec<Ipv4Addr> = interfaces.iter().map(|iface| iface.broadcast).collect();
 
     broadcasts.sort();
     broadcasts.dedup();
@@ -89,18 +86,9 @@ fn get_broadcast_addresses() -> Vec<Ipv4Addr> {
     broadcasts
 }
 
-fn get_local_ips() -> Vec<String> {
-    let interfaces = get_network_interfaces();
-    interfaces
-        .iter()
-        .map(|iface| iface.ip.to_string())
-        .collect()
-}
-
 #[tauri::command]
 pub async fn discover_services() -> Result<Vec<ServiceInfo>, String> {
     let mut services = Vec::new();
-    let local_ips = get_local_ips();
 
     let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("Bind failed: {}", e))?;
     socket
@@ -128,10 +116,6 @@ pub async fn discover_services() -> Result<Vec<ServiceInfo>, String> {
                 if let Ok(response) = std::str::from_utf8(&buf[..size]) {
                     if response.starts_with("ZHER_SERVICE:") {
                         let ip = addr.ip().to_string();
-
-                        if local_ips.contains(&ip) {
-                            continue;
-                        }
 
                         services.push(ServiceInfo {
                             ip: ip.clone(),

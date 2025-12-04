@@ -44,10 +44,29 @@
               </div>
             </div>
 
+            <!-- Pending Files Alert -->
+            <div v-if="hasPendingFiles && services.length > 0"
+              class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-blue-900 dark:text-blue-100">有文件待发送</p>
+                  <p class="text-xs text-blue-700 dark:text-blue-300 mt-0.5">点击下方服务发送文件</p>
+                </div>
+              </div>
+            </div>
+
             <!-- Discovered Services -->
             <div v-if="services.length > 0" class="space-y-2">
               <div v-for="service in services" :key="service.url" @click="handleOpenBrowser(service.url)"
-                class="p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 active:bg-gray-50 dark:active:bg-gray-800 transition-colors">
+                class="p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 active:bg-gray-50 dark:active:bg-gray-800 transition-colors"
+                :class="{ 'ring-2 ring-blue-500': hasPendingFiles }">
                 <div class="flex items-center gap-3">
                   <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none"
@@ -117,6 +136,7 @@ import BrowserView from './BrowserView.vue';
 import DownloadScreen from './DownloadScreen.vue';
 import SettingsScreen from './SettingsScreen.vue';
 import { useGlobalSocket } from '../composables/useGlobalSocket';
+import { useSharedFiles } from '../composables/useSharedFiles';
 
 const activePage = ref('zher');
 const currentBrowserUrl = ref('');
@@ -127,6 +147,7 @@ const isServerRunning = ref(false);
 const isLoading = ref(false);
 
 const { connections } = useGlobalSocket();
+const { hasPendingFiles } = useSharedFiles();
 
 let initialHeight = window.innerHeight;
 
@@ -149,12 +170,16 @@ const handleResize = () => {
 
 const refreshServices = async () => {
   isDiscovering.value = true;
+  console.log('Starting service discovery...');
   try {
     const discovered = await invoke('discover_services');
     services.value = discovered || [];
+    console.log(`Found ${services.value.length} services:`, services.value);
   } catch (e) {
+    console.error('Service discovery failed:', e);
   } finally {
     isDiscovering.value = false;
+    console.log('Service discovery completed');
   }
 };
 

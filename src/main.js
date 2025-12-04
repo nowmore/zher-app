@@ -3,6 +3,7 @@ import './style.css'
 import App from './App.vue'
 import { initDownloadManager } from './utils/downloadManager'
 import { initDebugConsole } from './utils/debugConsole'
+import './composables/useSharedFiles'
 
 initDebugConsole();
 initDownloadManager();

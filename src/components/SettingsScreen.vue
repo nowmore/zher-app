@@ -1,12 +1,12 @@
 <template>
-    <div class="flex-1 flex flex-col w-full h-full">
+    <div class="flex flex-col w-full h-full">
         <!-- Header -->
         <header class="px-4 py-4 shrink-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
             <h1 class="text-xl font-bold text-gray-900 dark:text-white">设置</h1>
         </header>
 
         <!-- Settings List -->
-        <div class="flex-1 overflow-y-auto">
+        <div class="overflow-y-auto shrink-0" :class="debugState.isEnabled ? '' : 'flex-1'">
             <div class="px-4 py-2">
                 <div class="flex items-center justify-between py-4 border-b border-gray-100 dark:border-gray-800">
                     <div class="flex items-center gap-3">
@@ -69,26 +69,29 @@
                 </div>
             </div>
         </div>
+        <!-- Debug Console - Takes remaining space -->
         <div v-if="debugState.isEnabled"
-            class="h-1/2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex flex-col">
+            class="flex-1 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex flex-col min-h-0">
             <div
-                class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800">
-                <span class="text-xs font-bold text-gray-500 uppercase">Console Output</span>
+                class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
+                <span class="text-xs font-bold text-gray-500 uppercase">Console Output ({{ debugState.logs.length }})</span>
                 <button @click="clearLogs"
                     class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Clear</button>
             </div>
-            <div class="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1">
-                <div v-for="log in debugState.logs" :key="log.id" class="break-all">
-                    <span class="text-gray-400">[{{ log.time }}]</span>
+            <div class="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1 select-text">
+                <div v-for="log in debugState.logs" :key="log.id" class="break-all select-text">
+                    <span class="text-gray-400 select-text">[{{ log.time }}]</span>
                     <span :class="{
                         'text-blue-600 dark:text-blue-400': log.type === 'log',
                         'text-yellow-600 dark:text-yellow-400': log.type === 'warn',
                         'text-red-600 dark:text-red-400': log.type === 'error',
-                        'text-green-600 dark:text-green-400': log.type === 'info'
-                    }" class="ml-2 uppercase font-bold">{{ log.type }}:</span>
-                    <span class="text-gray-800 dark:text-gray-200 ml-2">{{ log.message }}</span>
+                        'text-green-600 dark:text-green-400': log.type === 'info',
+                        'text-purple-600 dark:text-purple-400': log.type === 'rust',
+                        'text-orange-600 dark:text-orange-400': log.type === 'android'
+                    }" class="ml-2 uppercase font-bold select-text">{{ log.type }}:</span>
+                    <span class="text-gray-800 dark:text-gray-200 ml-2 select-text">{{ log.message }}</span>
                 </div>
-                <div v-if="debugState.logs.length === 0" class="text-gray-400 italic text-center mt-4">
+                <div v-if="debugState.logs.length === 0" class="text-gray-400 italic text-center mt-4 select-text">
                     No logs yet...
                 </div>
             </div>

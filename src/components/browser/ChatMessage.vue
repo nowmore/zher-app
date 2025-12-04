@@ -52,12 +52,12 @@
                         </div>
                         <div class="flex flex-col min-w-0">
                             <span class="text-sm font-medium truncate text-gray-800 dark:text-gray-100">{{ msg.fileName
-                            }}</span>
+                                }}</span>
                             <span class="text-[10px] text-gray-400">{{ formattedSize }}</span>
                         </div>
                     </div>
                     <!-- Download Button with Progress -->
-                    <div class="relative shrink-0">
+                    <div class="relative shrink-0" v-if="!isSelf">
                         <!-- Completed State -->
                         <button v-if="isCompleted"
                             class="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white shadow-sm">

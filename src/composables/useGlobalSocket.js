@@ -2,6 +2,7 @@ import { reactive } from 'vue';
 import { io } from 'socket.io-client';
 import { settings } from '../utils/settings';
 import { autoAction } from '../utils/action';
+
 class ServerConnection {
   constructor(serverKey) {
     this.serverKey = serverKey;
@@ -16,7 +17,8 @@ class ServerConnection {
     this.reconnectDelay = 2000;
     this.reconnectTimer = null;
     this.pingTimer = null;
-    this.messages = []; 
+    this.messages = [];
+    this.lastError = null;
     this.callbacks = {
       onMessage: [],
       onWelcome: [],
@@ -130,10 +132,15 @@ const setupSocketListeners = (conn, url) => {
     conn.startPing();
   });
 
-  conn.socket.on('disconnect', () => {
+  conn.socket.on('disconnect', (reason) => {
     conn.isConnected = false;
     conn.stopPing();
-    if (conn.reconnectAttempts < conn.maxReconnectAttempts) {
+
+    // If disconnected immediately after connection attempt, it might be a room code issue
+    if (reason === 'io server disconnect' && conn.reconnectAttempts === 0) {
+      // Server forcefully disconnected us, likely due to room code validation failure
+      conn.lastError = new Error('Room code validation failed');
+    } else if (conn.reconnectAttempts < conn.maxReconnectAttempts) {
       conn.scheduleReconnect(url);
     }
   });
@@ -171,7 +178,9 @@ const setupSocketListeners = (conn, url) => {
 
   conn.socket.on('message', async (msg) => {
     conn.addMessage(msg);
-    await autoAction(msg, conn.serverUrl);
+    if (msg.senderId !== conn.currentUser.id) {
+      await autoAction(msg, conn.serverUrl);
+    }
     conn.callbacks.onMessage.forEach(cb => cb(msg));
   });
 
@@ -189,9 +198,15 @@ const setupSocketListeners = (conn, url) => {
 
   conn.socket.on('pong', () => {
   });
+
+  conn.socket.on('connect_error', (error) => {
+    console.error('Connection error:', error.message);
+    conn.isConnecting = false;
+    conn.lastError = error;
+  });
 };
 
-const connectToServer = async (url, forceReconnect = false) => {
+const connectToServer = async (url, forceReconnect = false, roomCode = null) => {
   const serverKey = getServerKey(url);
 
   if (connections[serverKey]) {
@@ -224,15 +239,49 @@ const connectToServer = async (url, forceReconnect = false) => {
   try {
     const sessionId = await getSessionId();
 
+    const auth = { sessionId };
+
+    // Add room code if provided
+    if (roomCode) {
+      auth.roomCode = roomCode;
+    }
+
     conn.socket = io(url, {
-      auth: { sessionId },
+      auth,
       transports: ['websocket'],
       reconnection: false
     });
 
     setupSocketListeners(conn, url);
+
+    // Wait a bit to see if connection succeeds or fails
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        if (conn.lastError) {
+          reject(conn.lastError);
+        } else if (conn.isConnected) {
+          resolve();
+        } else {
+          resolve(); // Continue anyway
+        }
+      }, 1000);
+
+      if (conn.socket) {
+        conn.socket.once('connect', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        conn.socket.once('connect_error', (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      }
+    });
   } catch (error) {
     conn.isConnecting = false;
+    if (error && error.message && (error.message.includes('room code') || error.message.includes('Room code'))) {
+      throw error; // Throw room code errors for caller to handle
+    }
     conn.scheduleReconnect(url);
   }
 
