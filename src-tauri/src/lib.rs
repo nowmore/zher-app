@@ -61,6 +61,7 @@ pub fn run() {
             download::open_with_download,
             discovery::discover_services,
             discovery::validate_service_url,
+            discovery::get_local_ip,
             server::start_server,
             server::stop_server,
             server::get_server_status
