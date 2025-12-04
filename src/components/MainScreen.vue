@@ -191,8 +191,8 @@ const toggleServer = async () => {
     } else {
       await invoke('start_server');
       isServerRunning.value = true;
-      refreshServices();
     }
+    refreshServices();
   } catch (e) {
     console.error('Failed to toggle server:', e);
   }

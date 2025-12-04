@@ -13,6 +13,7 @@ pub struct ServiceInfo {
 struct NetworkInterface {
     #[allow(dead_code)]
     name: String,
+    #[allow(dead_code)]
     ip: Ipv4Addr,
     broadcast: Ipv4Addr,
     #[allow(dead_code)]
