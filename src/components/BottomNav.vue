@@ -5,14 +5,16 @@
 
     <nav class="grid grid-cols-3 items-center h-18 px-0">
       <button @click="switchPage('zher')"
-        class="clean-btn flex flex-col items-center justify-center w-full h-full transition-all duration-300 group">
-        <svg xmlns="http://www.w3.org/2000/svg"
-          class="h-6 w-6 mb-0.5 transition-transform duration-300 group-active:scale-90" fill="none" viewBox="0 0 24 24"
-          stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 5h12l-5 7h6l-12 8l3-7h-7z" />
-        </svg>
-        <span class="text-[10px] font-medium"
-          :class="activePage === 'zher' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'">zher</span>
+        class="clean-btn flex flex-col items-center justify-center w-full h-full py-2 px-1 transition-all duration-300 group relative"
+        :class="activePage === 'zher' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'">
+        <div class="relative">
+          <svg xmlns="http://www.w3.org/2000/svg"
+            class="h-6 w-6 mb-0.5 transition-transform duration-300 group-active:scale-90" fill="none"
+            viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 5h12l-5 7h6l-12 8l3-7h-7z" />
+          </svg>
+        </div>
+        <span class="text-[10px] font-medium">zher</span>
       </button>
 
       <button @click="switchPage('download')"
