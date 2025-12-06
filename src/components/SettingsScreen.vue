@@ -30,7 +30,7 @@
                                     d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                             </svg>
                         </div>
-                        <span class="text-base font-medium text-gray-900 dark:text-white">复制文本到剪贴板</span>
+                        <span class="text-base font-medium text-gray-900 dark:text-white">自动复制文本</span>
                     </div>
                     <Switch v-model="autoCopyText" />
                 </div>
@@ -74,7 +74,8 @@
             class="flex-1 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex flex-col min-h-0">
             <div
                 class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
-                <span class="text-xs font-bold text-gray-500 uppercase">Console Output ({{ debugState.logs.length }})</span>
+                <span class="text-xs font-bold text-gray-500 uppercase">Console Output ({{ debugState.logs.length
+                    }})</span>
                 <button @click="clearLogs"
                     class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Clear</button>
             </div>

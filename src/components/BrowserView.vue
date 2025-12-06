@@ -205,7 +205,6 @@ const handleChangeName = (newName) => {
 };
 
 const goToDownloads = () => {
-  emit('close');
   emit('navigate-to-downloads');
 };
 
@@ -330,10 +329,7 @@ const handleScroll = (e) => {
   }
 };
 
-const handleAndroidBack = () => {
-  emit('close');
-  return false;
-};
+
 
 const handleCopy = async (text, messageId) => {
   await copyText(text);
@@ -440,7 +436,6 @@ const loadSharedFilesAsFileObjects = async () => {
 };
 
 onMounted(async () => {
-  window.handleAndroidBack = handleAndroidBack;
   await initDownloadManager();
 
   if (window.visualViewport) {
@@ -523,10 +518,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (window.handleAndroidBack === handleAndroidBack) {
-    delete window.handleAndroidBack;
-  }
-
   if (window.visualViewport) {
     window.visualViewport.removeEventListener('resize', handleViewportResize);
   } else {

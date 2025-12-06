@@ -1,5 +1,5 @@
 <template>
-  <footer
+  <footer v-if="activePage"
     class="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-40 select-none transition-transform duration-200"
     :class="{ 'translate-y-full': isKeyboardVisible }" style="padding-bottom: env(safe-area-inset-bottom, 0px);">
 
@@ -72,26 +72,41 @@
 </style>
 
 <script setup>
-import { defineProps, defineEmits, computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 
-const props = defineProps({
-  modelValue: {
-    type: String,
-    default: 'zher'
-  }
-});
+const router = useRouter();
+const route = useRoute();
 
-const emit = defineEmits(['update:modelValue']);
-
-const activePage = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+const activePage = computed(() => {
+  // 如果在 browser 页面，不显示底部导航
+  if (route.name === 'BrowserView') return null;
+  
+  // 映射路由名称到页面标识
+  const nameMap = {
+    'ZherView': 'zher',
+    'DownloadView': 'download',
+    'SettingsView': 'settings'
+  };
+  
+  return nameMap[route.name] || 'zher';
 });
 
 const isKeyboardVisible = ref(false);
 
 const switchPage = (page) => {
-  activePage.value = page;
+  const currentPage = activePage.value;
+  if (currentPage === page) return;
+  
+  // 映射页面标识到路由名称
+  const routeMap = {
+    'zher': 'ZherView',
+    'download': 'DownloadView',
+    'settings': 'SettingsView'
+  };
+  
+  // 使用 replace 而不是 push，避免在底部导航切换时堆积历史
+  router.replace({ name: routeMap[page] });
 };
 
 let initialHeight = window.innerHeight;

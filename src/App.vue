@@ -1,7 +1,11 @@
 <script setup>
-import MainScreen from './components/MainScreen.vue';
 import { onMounted } from 'vue';
+import BottomNav from './components/BottomNav.vue';
 import { initTheme } from './utils/theme';
+import { useBackButton } from './composables/useBackButton';
+
+// 初始化 Android 返回按钮处理
+useBackButton();
 
 onMounted(async () => {
   await initTheme();
@@ -10,9 +14,12 @@ onMounted(async () => {
 
 <template>
   <div
-    class="relative min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 text-gray-800 dark:text-gray-100 transition-colors duration-300"
+    class="relative min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 text-gray-800 dark:text-gray-100 transition-colors duration-300 flex flex-col"
     style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
-    <MainScreen />
+    <main class="flex-1 flex flex-col overflow-y-auto pb-24">
+      <PageStackRouterView />
+    </main>
+    <BottomNav />
   </div>
 </template>
 
